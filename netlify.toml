@@ -10,11 +10,20 @@
   # The directory to publish (relative to base)
   publish = "dist"
 
+  # Functions directory
+  functions = "netlify/functions"
+
 # Build environment variables
 [build.environment]
   NODE_VERSION = "20"
 
-# Redirect all requests to index.html for SPA routing
+# Redirect API calls to Netlify Functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+# Redirect all other requests to index.html for SPA routing
 [[redirects]]
   from = "/*"
   to = "/index.html"

@@ -1,7 +1,7 @@
 import type { CashEntry, EntryType, EntryFormData, AutocompleteOption } from '../types';
 
-// API Base URL - Backend server
-const API_BASE_URL = 'http://localhost:3001/api';
+// API Base URL - Netlify Functions (works both locally and in production)
+const API_BASE_URL = '/api';
 
 // Helper function to handle fetch errors
 async function handleResponse<T>(response: Response): Promise<T> {
