@@ -10,8 +10,8 @@
   # The directory to publish (relative to base)
   publish = "dist"
 
-  # Functions directory
-  functions = "netlify/functions"
+  # Functions directory (relative to base, so ../ to go to root)
+  functions = "../netlify/functions"
 
 # Build environment variables
 [build.environment]
