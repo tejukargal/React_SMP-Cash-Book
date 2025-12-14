@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import EntryForm from '../components/EntryForm';
 import type { CashEntry, EntryType, EntryFormData } from '../types';
-import { formatAmount, calculateRunningBalance, getTodayDate } from '../utils/helpers';
+import { formatAmount, calculateClosingBalance, getTodayDate } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import jsPDF from 'jspdf';
@@ -455,7 +455,7 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                     Notes
                   </th>
                   <th className="text-right px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Balance
+                    Closing Balance
                   </th>
                   <th className="text-center px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300 w-24">
                     Actions
@@ -464,7 +464,7 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
               </thead>
               <tbody>
                 {filteredEntries.map((entry, index) => {
-                  const balance = calculateRunningBalance(filteredEntries, index);
+                  const closingBalance = calculateClosingBalance(filteredEntries, index);
                   const rowBgColor =
                     entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
 
@@ -500,10 +500,14 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                       </td>
                       <td
                         className={`px-3 py-1 text-sm text-right font-semibold ${
-                          balance >= 0 ? 'text-green-700' : 'text-red-700'
+                          closingBalance !== null
+                            ? closingBalance >= 0
+                              ? 'text-green-700'
+                              : 'text-red-700'
+                            : 'text-gray-400'
                         }`}
                       >
-                        {formatAmount(balance)}
+                        {closingBalance !== null ? formatAmount(closingBalance) : '-'}
                       </td>
                       <td className="px-3 py-1 text-center">
                         <div className="flex items-center justify-center gap-1.5">

@@ -136,3 +136,36 @@ export function calculateRunningBalance(
 
   return balance;
 }
+
+// Calculate closing balance (date-wise) - matches Excel formula logic
+// Returns closing balance only for the last entry of each date, null otherwise
+export function calculateClosingBalance(
+  entries: Array<{ date: string; type: 'receipt' | 'payment'; amount: number | string }>,
+  currentIndex: number
+): number | null {
+  // Check if this is the last entry for this date
+  const currentDate = entries[currentIndex].date;
+  const isLastEntryOfDate =
+    currentIndex === entries.length - 1 ||
+    entries[currentIndex + 1].date !== currentDate;
+
+  if (!isLastEntryOfDate) {
+    return null; // Don't show balance for non-last entries of a date
+  }
+
+  // Calculate closing balance from the beginning up to this date
+  let closingBalance = 0;
+
+  for (let i = 0; i <= currentIndex; i++) {
+    const entry = entries[i];
+    const amount = typeof entry.amount === 'string' ? parseFloat(entry.amount) : entry.amount;
+
+    if (entry.type === 'receipt') {
+      closingBalance += amount;
+    } else {
+      closingBalance -= amount;
+    }
+  }
+
+  return closingBalance;
+}
