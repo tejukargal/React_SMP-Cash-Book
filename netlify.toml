@@ -4,8 +4,8 @@
   # The base directory for the build
   base = "smp-cashbook"
 
-  # The build command
-  command = "npm run build"
+  # The build command - install root deps first, then build frontend
+  command = "cd .. && npm install && cd smp-cashbook && npm run build"
 
   # The directory to publish (relative to base)
   publish = "dist"
