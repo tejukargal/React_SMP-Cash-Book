@@ -30,15 +30,19 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
     try {
       // Always fetch fresh data without FY filter for new entries page
       const allEntries = await db.getAllEntries(selectedFY);
-      // Sort by date (oldest to newest) and show only the most recent 29 entries
-      const sorted = allEntries.sort((a, b) => {
+
+      // Sort entries by date (oldest to newest)
+      const sortedEntries = allEntries.sort((a, b) => {
         const [dayA, monthA, yearA] = a.date.split('/').map(Number);
         const [dayB, monthB, yearB] = b.date.split('/').map(Number);
         const dateA = new Date(2000 + yearA, monthA - 1, dayA);
         const dateB = new Date(2000 + yearB, monthB - 1, dayB);
         return dateA.getTime() - dateB.getTime();
       });
-      const recent = sorted.slice(-29);
+
+      // Show only the most recent 20 entries (last 20 after sorting)
+      const recent = sortedEntries.slice(-20);
+
       // Force update by creating new array
       setRecentEntries(recent.map(entry => ({ ...entry })));
     } catch (error) {
@@ -204,11 +208,11 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         ) : null}
       </div>
 
-      {/* Recent 29 Transactions */}
+      {/* Recent 20 Transactions */}
       <div className="flex-1 bg-white shadow-sm mx-2 mb-2 rounded-lg overflow-hidden flex flex-col">
         <div className="bg-gray-100 border-b border-gray-300 px-3 py-1.5 flex justify-between items-center">
           <div>
-            <h2 className="text-sm font-semibold text-gray-800">Recent Transactions (Last 29)</h2>
+            <h2 className="text-sm font-semibold text-gray-800">Recent Transactions (Last 20)</h2>
             <p className="text-xs text-gray-600">FY: {getFinancialYearDisplay(selectedFY)}</p>
           </div>
           {/* Search */}
