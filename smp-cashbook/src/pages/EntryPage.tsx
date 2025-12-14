@@ -14,6 +14,7 @@ interface EntryPageProps {
 export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
   const [currentStep, setCurrentStep] = useState<AppStep>('select-type');
   const [selectedType, setSelectedType] = useState<EntryType | null>(null);
+  const [allEntries, setAllEntries] = useState<CashEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<CashEntry[]>([]);
   const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
   const [editData, setEditData] = useState<{ id: string; formData: EntryFormData } | null>(null);
@@ -29,16 +30,19 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
   const loadRecentEntries = async () => {
     try {
       // Always fetch fresh data without FY filter for new entries page
-      const allEntries = await db.getAllEntries(selectedFY);
+      const entries = await db.getAllEntries(selectedFY);
 
       // Sort entries by date (oldest to newest)
-      const sortedEntries = allEntries.sort((a, b) => {
+      const sortedEntries = entries.sort((a, b) => {
         const [dayA, monthA, yearA] = a.date.split('/').map(Number);
         const [dayB, monthB, yearB] = b.date.split('/').map(Number);
         const dateA = new Date(2000 + yearA, monthA - 1, dayA);
         const dateB = new Date(2000 + yearB, monthB - 1, dayB);
         return dateA.getTime() - dateB.getTime();
       });
+
+      // Store all entries for closing balance calculation
+      setAllEntries(sortedEntries);
 
       // Show only the most recent 20 entries (last 20 after sorting)
       const recent = sortedEntries.slice(-20);
@@ -277,8 +281,10 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.map((entry, index) => {
-                  const closingBalance = calculateClosingBalance(filteredEntries, index);
+                {filteredEntries.map((entry) => {
+                  // Find the actual index in allEntries for correct closing balance
+                  const actualIndex = allEntries.findIndex(e => e.id === entry.id);
+                  const closingBalance = actualIndex >= 0 ? calculateClosingBalance(allEntries, actualIndex) : null;
                   const rowBgColor =
                     entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
 
