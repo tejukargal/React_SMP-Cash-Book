@@ -14,7 +14,12 @@
       "Bash(node server.js:*)",
       "Bash(timeout:*)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(netlify --version:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
