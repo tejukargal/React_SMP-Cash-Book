@@ -334,23 +334,32 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
           ) : splitView ? (
             // Split View - Receipts and Payments side by side
             <div className="p-2">
-              {sortedDates.map((date) => {
-                const { receipts, payments } = groupedByDate[date];
-                const dateReceipts = receipts.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
-                const datePayments = payments.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
+              {(() => {
+                let cumulativeClosingBalance = 0;
+                return sortedDates.map((date) => {
+                  const { receipts, payments } = groupedByDate[date];
+                  const dateReceipts = receipts.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
+                  const datePayments = payments.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
 
-                return (
-                  <div key={date} className="mb-4 border border-gray-300 rounded-lg overflow-hidden">
-                    {/* Date Header */}
-                    <div className="bg-blue-100 border-b border-gray-300 px-3 py-2">
-                      <div className="flex justify-between items-center">
-                        <h3 className="text-sm font-bold text-gray-800">{date}</h3>
-                        <div className="flex gap-4 text-xs">
-                          <span className="text-green-700 font-semibold">R: {formatAmount(dateReceipts)}</span>
-                          <span className="text-red-700 font-semibold">P: {formatAmount(datePayments)}</span>
+                  // Calculate closing balance for this date
+                  cumulativeClosingBalance += dateReceipts - datePayments;
+                  const closingBalance = cumulativeClosingBalance;
+
+                  return (
+                    <div key={date} className="mb-4 border border-gray-300 rounded-lg overflow-hidden">
+                      {/* Date Header */}
+                      <div className="bg-blue-100 border-b border-gray-300 px-3 py-2">
+                        <div className="flex justify-between items-center">
+                          <h3 className="text-sm font-bold text-gray-800">{date}</h3>
+                          <div className="flex gap-4 text-xs">
+                            <span className="text-green-700 font-semibold">R: {formatAmount(dateReceipts)}</span>
+                            <span className="text-red-700 font-semibold">P: {formatAmount(datePayments)}</span>
+                            <span className={`font-bold ${closingBalance >= 0 ? 'text-blue-700' : 'text-orange-700'}`}>
+                              CB: {formatAmount(closingBalance)}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
                     {/* Side by Side Tables */}
                     <div className="grid grid-cols-2 gap-0 divide-x divide-gray-300">
@@ -437,8 +446,9 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                       </div>
                     </div>
                   </div>
-                );
-              })}
+                  );
+                });
+              })()}
             </div>
           ) : (
             // Regular Table View
