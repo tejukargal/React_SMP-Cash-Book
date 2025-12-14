@@ -18,13 +18,11 @@ function calculateFinancialYear(dateStr) {
   const month = parseInt(match[2], 10);
   const year = parseInt(match[3], 10);
 
-  // If month is Jan-Mar (1-3), FY is (year-1)-year
   if (month >= 1 && month <= 3) {
     const prevYear = year - 1;
     return `${prevYear.toString().padStart(2, '0')}-${year.toString().padStart(2, '0')}`;
   }
 
-  // If month is Apr-Dec (4-12), FY is year-(year+1)
   const nextYear = year + 1;
   return `${year.toString().padStart(2, '0')}-${nextYear.toString().padStart(2, '0')}`;
 }
@@ -49,26 +47,135 @@ exports.handler = async (event, context) => {
     return sendResponse(200, {});
   }
 
-  // Extract path - remove both possible prefixes
-  let path = event.path
-    .replace('/.netlify/functions/api/', '')
-    .replace('/.netlify/functions/api', '')
-    .replace(/^\/+/, ''); // Remove leading slashes
-
   const method = event.httpMethod;
   const queryParams = event.queryStringParameters || {};
-  const body = event.body ? JSON.parse(event.body) : {};
-
-  console.log(`${method} /${path}`);
+  let body = {};
 
   try {
-    // Health check
-    if (method === 'GET' && path === 'health') {
+    body = event.body ? JSON.parse(event.body) : {};
+  } catch (e) {
+    // Ignore JSON parse errors for empty body
+  }
+
+  // Extract the route path - handle all possible formats
+  // Netlify can send: /.netlify/functions/api/entries/recent-date
+  // Or via redirect: the path portion after /api/
+  let route = event.path || '';
+
+  // Remove function prefix if present
+  route = route.replace('/.netlify/functions/api', '');
+  route = route.replace(/^\/+/, ''); // Remove leading slashes
+  route = route.replace(/\/+$/, ''); // Remove trailing slashes
+
+  console.log(`[API] ${method} /${route}`, queryParams);
+
+  try {
+    // ===== HEALTH CHECK =====
+    if (method === 'GET' && (route === 'health' || route === '')) {
       return sendResponse(200, { status: 'ok', message: 'SMP Cash Book API is running' });
     }
 
-    // Get all entries
-    if (method === 'GET' && path === 'entries') {
+    // ===== GET RECENT DATE (must come before general entries route) =====
+    if (method === 'GET' && route === 'entries/recent-date') {
+      const result = await pool.query(
+        'SELECT date FROM cash_entries ORDER BY created_at DESC LIMIT 1'
+      );
+      return sendResponse(200, result.rows.length > 0 ? { date: result.rows[0].date } : { date: null });
+    }
+
+    // ===== CHECK DUPLICATE (must come before POST entries) =====
+    if (method === 'POST' && route === 'entries/check-duplicate') {
+      const { date, type, amount, head_of_accounts, cheque_no, notes } = body;
+      const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
+
+      const result = await pool.query(
+        `SELECT COUNT(*) as count
+         FROM cash_entries
+         WHERE date = $1 AND type = $2 AND amount = $3 AND head_of_accounts = $4
+         AND (cheque_no = $5 OR (cheque_no IS NULL AND $5 IS NULL))
+         AND (notes = $6 OR (notes IS NULL AND $6 IS NULL))
+         AND created_at > $7`,
+        [date, type, parseFloat(amount), head_of_accounts, cheque_no, notes, fiveSecondsAgo]
+      );
+
+      return sendResponse(200, { isDuplicate: parseInt(result.rows[0].count) > 0 });
+    }
+
+    // ===== BULK IMPORT (must come before POST entries) =====
+    if (method === 'POST' && route === 'entries/bulk-import') {
+      const { entries } = body;
+
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return sendResponse(400, { error: 'Entries array is required' });
+      }
+
+      const client = await pool.connect();
+      const results = [];
+      const errors = [];
+
+      try {
+        await client.query('BEGIN');
+
+        for (let i = 0; i < entries.length; i++) {
+          const { date, type, cheque_no, amount, head_of_accounts, notes } = entries[i];
+
+          try {
+            if (!date || !type || !amount || !head_of_accounts || !cheque_no || !notes) {
+              errors.push({ index: i, entry: entries[i], error: 'Missing required fields' });
+              continue;
+            }
+
+            if (type !== 'receipt' && type !== 'payment') {
+              errors.push({ index: i, entry: entries[i], error: 'Invalid type' });
+              continue;
+            }
+
+            const financial_year = calculateFinancialYear(date);
+
+            const result = await client.query(
+              `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING *`,
+              [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year]
+            );
+
+            results.push(result.rows[0]);
+          } catch (err) {
+            errors.push({ index: i, entry: entries[i], error: err.message });
+          }
+        }
+
+        await client.query('COMMIT');
+
+        return sendResponse(201, {
+          success: true,
+          imported: results.length,
+          failed: errors.length,
+          results,
+          errors,
+        });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+
+    // ===== DELETE ALL ENTRIES (must come before DELETE by ID) =====
+    if (method === 'DELETE' && route === 'entries/delete-all') {
+      const result = await pool.query('DELETE FROM cash_entries');
+      const deletedCount = result.rowCount || 0;
+
+      return sendResponse(200, {
+        success: true,
+        deleted: deletedCount,
+        message: `Successfully deleted ${deletedCount} entries`
+      });
+    }
+
+    // ===== GET ALL ENTRIES =====
+    if (method === 'GET' && route === 'entries') {
       const { fy } = queryParams;
       let query = `SELECT * FROM cash_entries`;
       const params = [];
@@ -92,20 +199,10 @@ exports.handler = async (event, context) => {
       return sendResponse(200, result.rows);
     }
 
-    // Get most recent date
-    if (method === 'GET' && path === 'entries/recent-date') {
-      const result = await pool.query(
-        'SELECT date FROM cash_entries ORDER BY created_at DESC LIMIT 1'
-      );
-      return sendResponse(200, result.rows.length > 0 ? { date: result.rows[0].date } : { date: null });
-    }
-
-    // Get suggestions for head
-    if (method === 'GET' && path === 'suggestions/head') {
+    // ===== GET SUGGESTIONS =====
+    if (method === 'GET' && route === 'suggestions/head') {
       const { query } = queryParams;
-      if (!query || query.length < 2) {
-        return sendResponse(200, []);
-      }
+      if (!query || query.length < 2) return sendResponse(200, []);
 
       const result = await pool.query(
         `SELECT head_of_accounts as value, COUNT(*) as count
@@ -119,12 +216,9 @@ exports.handler = async (event, context) => {
       return sendResponse(200, result.rows);
     }
 
-    // Get suggestions for cheque
-    if (method === 'GET' && path === 'suggestions/cheque') {
+    if (method === 'GET' && route === 'suggestions/cheque') {
       const { query } = queryParams;
-      if (!query || query.length < 1) {
-        return sendResponse(200, []);
-      }
+      if (!query || query.length < 1) return sendResponse(200, []);
 
       const result = await pool.query(
         `SELECT cheque_no as value, COUNT(*) as count
@@ -138,12 +232,9 @@ exports.handler = async (event, context) => {
       return sendResponse(200, result.rows);
     }
 
-    // Get suggestions for notes
-    if (method === 'GET' && path === 'suggestions/notes') {
+    if (method === 'GET' && route === 'suggestions/notes') {
       const { query } = queryParams;
-      if (!query || query.length < 2) {
-        return sendResponse(200, []);
-      }
+      if (!query || query.length < 2) return sendResponse(200, []);
 
       const result = await pool.query(
         `SELECT notes as value, COUNT(*) as count
@@ -157,11 +248,10 @@ exports.handler = async (event, context) => {
       return sendResponse(200, result.rows);
     }
 
-    // Create new entry
-    if (method === 'POST' && path === 'entries') {
+    // ===== CREATE NEW ENTRY =====
+    if (method === 'POST' && route === 'entries') {
       const { date, type, cheque_no, amount, head_of_accounts, notes } = body;
 
-      // Validation
       if (!date || !type || !amount || !head_of_accounts || !cheque_no || !notes) {
         return sendResponse(400, { error: 'All fields are required' });
       }
@@ -182,13 +272,10 @@ exports.handler = async (event, context) => {
       return sendResponse(201, result.rows[0]);
     }
 
-    // Get entry by ID
-    if (method === 'GET' && path.match(/^entries\/[^/]+$/)) {
-      const id = path.split('/')[1];
-      const result = await pool.query(
-        'SELECT * FROM cash_entries WHERE id = $1',
-        [id]
-      );
+    // ===== GET ENTRY BY ID =====
+    if (method === 'GET' && route.match(/^entries\/[^/]+$/)) {
+      const id = route.split('/')[1];
+      const result = await pool.query('SELECT * FROM cash_entries WHERE id = $1', [id]);
 
       if (result.rows.length === 0) {
         return sendResponse(404, { error: 'Entry not found' });
@@ -196,9 +283,9 @@ exports.handler = async (event, context) => {
       return sendResponse(200, result.rows[0]);
     }
 
-    // Update entry
-    if (method === 'PUT' && path.match(/^entries\/[^/]+$/)) {
-      const id = path.split('/')[1];
+    // ===== UPDATE ENTRY =====
+    if (method === 'PUT' && route.match(/^entries\/[^/]+$/)) {
+      const id = route.split('/')[1];
       const { date, cheque_no, amount, head_of_accounts, notes } = body;
 
       const financial_year = calculateFinancialYear(date);
@@ -217,25 +304,10 @@ exports.handler = async (event, context) => {
       return sendResponse(200, result.rows[0]);
     }
 
-    // Delete all entries
-    if (method === 'DELETE' && path === 'entries/delete-all') {
-      const result = await pool.query('DELETE FROM cash_entries');
-      const deletedCount = result.rowCount || 0;
-
-      return sendResponse(200, {
-        success: true,
-        deleted: deletedCount,
-        message: `Successfully deleted ${deletedCount} entries`
-      });
-    }
-
-    // Delete entry by ID
-    if (method === 'DELETE' && path.match(/^entries\/[^/]+$/)) {
-      const id = path.split('/')[1];
-      const result = await pool.query(
-        'DELETE FROM cash_entries WHERE id = $1 RETURNING *',
-        [id]
-      );
+    // ===== DELETE ENTRY BY ID =====
+    if (method === 'DELETE' && route.match(/^entries\/[^/]+$/)) {
+      const id = route.split('/')[1];
+      const result = await pool.query('DELETE FROM cash_entries WHERE id = $1 RETURNING *', [id]);
 
       if (result.rows.length === 0) {
         return sendResponse(404, { error: 'Entry not found' });
@@ -243,102 +315,12 @@ exports.handler = async (event, context) => {
       return sendResponse(200, { success: true, deleted: result.rows[0] });
     }
 
-    // Check duplicate
-    if (method === 'POST' && path === 'entries/check-duplicate') {
-      const { date, type, amount, head_of_accounts, cheque_no, notes } = body;
-      const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
-
-      const result = await pool.query(
-        `SELECT COUNT(*) as count
-         FROM cash_entries
-         WHERE date = $1 AND type = $2 AND amount = $3 AND head_of_accounts = $4
-         AND (cheque_no = $5 OR (cheque_no IS NULL AND $5 IS NULL))
-         AND (notes = $6 OR (notes IS NULL AND $6 IS NULL))
-         AND created_at > $7`,
-        [date, type, parseFloat(amount), head_of_accounts, cheque_no, notes, fiveSecondsAgo]
-      );
-
-      return sendResponse(200, { isDuplicate: parseInt(result.rows[0].count) > 0 });
-    }
-
-    // Bulk import
-    if (method === 'POST' && path === 'entries/bulk-import') {
-      const { entries } = body;
-
-      if (!Array.isArray(entries) || entries.length === 0) {
-        return sendResponse(400, { error: 'Entries array is required' });
-      }
-
-      const client = await pool.connect();
-      const results = [];
-      const errors = [];
-
-      try {
-        await client.query('BEGIN');
-
-        for (let i = 0; i < entries.length; i++) {
-          const { date, type, cheque_no, amount, head_of_accounts, notes } = entries[i];
-
-          try {
-            if (!date || !type || !amount || !head_of_accounts || !cheque_no || !notes) {
-              errors.push({
-                index: i,
-                entry: entries[i],
-                error: 'Missing required fields',
-              });
-              continue;
-            }
-
-            if (type !== 'receipt' && type !== 'payment') {
-              errors.push({
-                index: i,
-                entry: entries[i],
-                error: 'Invalid type. Must be "receipt" or "payment"',
-              });
-              continue;
-            }
-
-            const financial_year = calculateFinancialYear(date);
-
-            const result = await client.query(
-              `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING *`,
-              [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year]
-            );
-
-            results.push(result.rows[0]);
-          } catch (err) {
-            errors.push({
-              index: i,
-              entry: entries[i],
-              error: err.message,
-            });
-          }
-        }
-
-        await client.query('COMMIT');
-
-        return sendResponse(201, {
-          success: true,
-          imported: results.length,
-          failed: errors.length,
-          results,
-          errors,
-        });
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
-    }
-
     // Route not found
-    return sendResponse(404, { error: 'Route not found' });
+    console.log(`[API] Route not found: ${method} /${route}`);
+    return sendResponse(404, { error: 'Route not found', path: route, method });
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('[API] Error:', error);
     return sendResponse(500, { error: 'Internal server error', details: error.message });
   }
 };
