@@ -60,18 +60,19 @@ exports.handler = async (event, context) => {
   // Extract the route path
   let route = event.path || '';
 
-  // Netlify redirects send the original path, so /api/entries comes as /api/entries
-  // Remove /api prefix
-  route = route.replace('/api/', '').replace('/api', '');
+  console.log(`[API DEBUG] Original event.path: "${event.path}"`);
 
-  // Also handle if it comes as /.netlify/functions/api/...
-  route = route.replace('/.netlify/functions/api/', '').replace('/.netlify/functions/api', '');
+  // Remove all possible prefixes
+  route = route.replace('/.netlify/functions/api/', '');
+  route = route.replace('/.netlify/functions/api', '');
+  route = route.replace('/api/', '');
+  route = route.replace('/api', '');
 
-  // Clean up
-  route = route.replace(/^\/+/, ''); // Remove leading slashes
-  route = route.replace(/\/+$/, ''); // Remove trailing slashes
+  // Clean up leading/trailing slashes
+  route = route.replace(/^\/+/, '');
+  route = route.replace(/\/+$/, '');
 
-  console.log(`[API] Original path: ${event.path}, Extracted route: ${route}, Method: ${method}`);
+  console.log(`[API] Method: ${method}, Route: "${route}", Query:`, queryParams);
 
   try {
     // ===== HEALTH CHECK =====
