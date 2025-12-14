@@ -57,17 +57,21 @@ exports.handler = async (event, context) => {
     // Ignore JSON parse errors for empty body
   }
 
-  // Extract the route path - handle all possible formats
-  // Netlify can send: /.netlify/functions/api/entries/recent-date
-  // Or via redirect: the path portion after /api/
+  // Extract the route path
   let route = event.path || '';
 
-  // Remove function prefix if present
-  route = route.replace('/.netlify/functions/api', '');
+  // Netlify redirects send the original path, so /api/entries comes as /api/entries
+  // Remove /api prefix
+  route = route.replace('/api/', '').replace('/api', '');
+
+  // Also handle if it comes as /.netlify/functions/api/...
+  route = route.replace('/.netlify/functions/api/', '').replace('/.netlify/functions/api', '');
+
+  // Clean up
   route = route.replace(/^\/+/, ''); // Remove leading slashes
   route = route.replace(/\/+$/, ''); // Remove trailing slashes
 
-  console.log(`[API] ${method} /${route}`, queryParams);
+  console.log(`[API] Original path: ${event.path}, Extracted route: ${route}, Method: ${method}`);
 
   try {
     // ===== HEALTH CHECK =====
