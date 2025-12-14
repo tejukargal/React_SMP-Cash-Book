@@ -23,7 +23,8 @@
       "Bash(netlify status:*)",
       "Bash(netlify link:*)",
       "Bash(netlify sites:list:*)",
-      "Bash(netlify deploy:*)"
+      "Bash(netlify deploy:*)",
+      "Bash(netlify env:set:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

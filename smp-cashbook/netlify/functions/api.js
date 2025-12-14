@@ -49,12 +49,17 @@ exports.handler = async (event, context) => {
     return sendResponse(200, {});
   }
 
-  const path = event.path.replace('/.netlify/functions/api/', '');
+  // Extract path - remove both possible prefixes
+  let path = event.path
+    .replace('/.netlify/functions/api/', '')
+    .replace('/.netlify/functions/api', '')
+    .replace(/^\/+/, ''); // Remove leading slashes
+
   const method = event.httpMethod;
   const queryParams = event.queryStringParameters || {};
   const body = event.body ? JSON.parse(event.body) : {};
 
-  console.log(`${method} ${path}`);
+  console.log(`${method} /${path}`);
 
   try {
     // Health check
