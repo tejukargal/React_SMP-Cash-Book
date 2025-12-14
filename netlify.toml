@@ -1,0 +1,36 @@
+# Netlify configuration for SMP Cash Book
+
+[build]
+  # The base directory for the build
+  base = "smp-cashbook"
+
+  # The build command
+  command = "npm run build"
+
+  # The directory to publish (relative to base)
+  publish = "dist"
+
+# Build environment variables
+[build.environment]
+  NODE_VERSION = "20"
+
+# Redirect all requests to index.html for SPA routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Headers for security
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+# Cache static assets
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
