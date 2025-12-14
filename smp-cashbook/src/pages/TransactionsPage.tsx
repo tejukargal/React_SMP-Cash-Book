@@ -142,18 +142,27 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
   };
 
   // Filter entries based on search and type filter
-  const filteredEntries = entries.filter((entry) => {
-    const matchesSearch = searchQuery
-      ? entry.head_of_accounts.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.cheque_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        entry.date.includes(searchQuery)
-      : true;
+  const filteredEntries = entries
+    .filter((entry) => {
+      const matchesSearch = searchQuery
+        ? entry.head_of_accounts.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          entry.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          entry.cheque_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          entry.date.includes(searchQuery)
+        : true;
 
-    const matchesType = filterType === 'all' ? true : entry.type === filterType;
+      const matchesType = filterType === 'all' ? true : entry.type === filterType;
 
-    return matchesSearch && matchesType;
-  });
+      return matchesSearch && matchesType;
+    })
+    .sort((a, b) => {
+      // Sort dates in ascending order (oldest first)
+      const [dayA, monthA, yearA] = a.date.split('/').map(Number);
+      const [dayB, monthB, yearB] = b.date.split('/').map(Number);
+      const dateA = new Date(2000 + yearA, monthA - 1, dayA);
+      const dateB = new Date(2000 + yearB, monthB - 1, dayB);
+      return dateA.getTime() - dateB.getTime();
+    });
 
   // Calculate totals for filtered entries
   const totalReceipts = filteredEntries
@@ -180,12 +189,12 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
   }, {} as Record<string, { receipts: CashEntry[]; payments: CashEntry[] }>);
 
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
-    // Sort dates in descending order (most recent first)
+    // Sort dates in ascending order (oldest first)
     const [dayA, monthA, yearA] = a.split('/').map(Number);
     const [dayB, monthB, yearB] = b.split('/').map(Number);
     const dateA = new Date(2000 + yearA, monthA - 1, dayA);
     const dateB = new Date(2000 + yearB, monthB - 1, dayB);
-    return dateB.getTime() - dateA.getTime();
+    return dateA.getTime() - dateB.getTime();
   });
 
   return (
