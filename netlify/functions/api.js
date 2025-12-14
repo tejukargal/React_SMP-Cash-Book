@@ -57,22 +57,39 @@ exports.handler = async (event, context) => {
     // Ignore JSON parse errors for empty body
   }
 
-  // Extract the route path
-  let route = event.path || '';
+  // Debug log the entire event to understand what we're receiving
+  console.log('[API DEBUG] event.path:', event.path);
+  console.log('[API DEBUG] event.rawUrl:', event.rawUrl);
 
-  console.log(`[API DEBUG] Original event.path: "${event.path}"`);
+  // Extract route from path
+  // The function is called via redirect from /api/* to /.netlify/functions/api/:splat
+  // So event.path might be /.netlify/functions/api or the original /api/entries
+  let route = '';
 
-  // Remove all possible prefixes
-  route = route.replace('/.netlify/functions/api/', '');
-  route = route.replace('/.netlify/functions/api', '');
-  route = route.replace('/api/', '');
-  route = route.replace('/api', '');
+  // Try to extract from rawUrl first (more reliable)
+  if (event.rawUrl) {
+    const url = new URL(event.rawUrl);
+    route = url.pathname;
+    console.log('[API DEBUG] Extracted from rawUrl.pathname:', route);
+  } else {
+    route = event.path || '';
+    console.log('[API DEBUG] Using event.path:', route);
+  }
 
-  // Clean up leading/trailing slashes
-  route = route.replace(/^\/+/, '');
-  route = route.replace(/\/+$/, '');
+  // Remove all possible prefixes - be aggressive
+  const prefixes = ['/.netlify/functions/api/', '/.netlify/functions/api', '/api/', '/api'];
+  for (const prefix of prefixes) {
+    if (route.startsWith(prefix)) {
+      route = route.substring(prefix.length);
+      console.log(`[API DEBUG] After removing "${prefix}":`, route);
+      break;
+    }
+  }
 
-  console.log(`[API] Method: ${method}, Route: "${route}", Query:`, queryParams);
+  // Clean up slashes
+  route = route.replace(/^\/+/, '').replace(/\/+$/, '');
+
+  console.log(`[API] ${method} /${route}`);
 
   try {
     // ===== HEALTH CHECK =====
