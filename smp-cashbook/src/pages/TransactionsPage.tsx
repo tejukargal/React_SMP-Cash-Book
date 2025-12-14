@@ -356,8 +356,22 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                           <div className="divide-y divide-green-200">
                             {receipts.map((entry) => (
                               <div key={entry.id} className="px-2 py-1.5 hover:bg-green-100">
-                                <div className="flex justify-between items-start mb-0.5">
-                                  <span className="text-xs font-medium text-gray-800">{entry.head_of_accounts}</span>
+                                <div className="flex justify-between items-center mb-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold underline text-gray-800">{entry.head_of_accounts}</span>
+                                    <button
+                                      onClick={() => handleEdit(entry)}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(entry.id, entry.head_of_accounts)}
+                                      className="text-red-600 hover:text-red-800 text-xs"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
                                   <span className="text-xs font-bold text-green-700">{formatAmount(entry.amount)}</span>
                                 </div>
                                 {entry.cheque_no && (
@@ -366,20 +380,6 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                                 {entry.notes && (
                                   <div className="text-xs text-gray-600 truncate">{entry.notes}</div>
                                 )}
-                                <div className="flex gap-2 mt-1">
-                                  <button
-                                    onClick={() => handleEdit(entry)}
-                                    className="text-blue-600 hover:text-blue-800 text-xs"
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(entry.id, entry.head_of_accounts)}
-                                    className="text-red-600 hover:text-red-800 text-xs"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
                               </div>
                             ))}
                           </div>
@@ -397,8 +397,22 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                           <div className="divide-y divide-red-200">
                             {payments.map((entry) => (
                               <div key={entry.id} className="px-2 py-1.5 hover:bg-red-100">
-                                <div className="flex justify-between items-start mb-0.5">
-                                  <span className="text-xs font-medium text-gray-800">{entry.head_of_accounts}</span>
+                                <div className="flex justify-between items-center mb-0.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-bold underline text-gray-800">{entry.head_of_accounts}</span>
+                                    <button
+                                      onClick={() => handleEdit(entry)}
+                                      className="text-blue-600 hover:text-blue-800 text-xs"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      onClick={() => handleDelete(entry.id, entry.head_of_accounts)}
+                                      className="text-red-600 hover:text-red-800 text-xs"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
                                   <span className="text-xs font-bold text-red-700">{formatAmount(entry.amount)}</span>
                                 </div>
                                 {entry.cheque_no && (
@@ -407,20 +421,6 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                                 {entry.notes && (
                                   <div className="text-xs text-gray-600 truncate">{entry.notes}</div>
                                 )}
-                                <div className="flex gap-2 mt-1">
-                                  <button
-                                    onClick={() => handleEdit(entry)}
-                                    className="text-blue-600 hover:text-blue-800 text-xs"
-                                  >
-                                    Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(entry.id, entry.head_of_accounts)}
-                                    className="text-red-600 hover:text-red-800 text-xs"
-                                  >
-                                    Delete
-                                  </button>
-                                </div>
                               </div>
                             ))}
                           </div>
