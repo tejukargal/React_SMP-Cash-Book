@@ -14,7 +14,6 @@ interface EntryPageProps {
 export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
   const [currentStep, setCurrentStep] = useState<AppStep>('select-type');
   const [selectedType, setSelectedType] = useState<EntryType | null>(null);
-  const [allEntries, setAllEntries] = useState<CashEntry[]>([]);
   const [recentEntries, setRecentEntries] = useState<CashEntry[]>([]);
   const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
   const [editData, setEditData] = useState<{ id: string; formData: EntryFormData } | null>(null);
@@ -30,10 +29,10 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
   const loadRecentEntries = async () => {
     try {
       // Always fetch fresh data without FY filter for new entries page
-      const entries = await db.getAllEntries(selectedFY);
+      const allEntries = await db.getAllEntries(selectedFY);
 
-      // Sort entries by date (oldest to newest)
-      const sortedEntries = entries.sort((a, b) => {
+      // Sort entries oldest to newest
+      const sortedEntries = allEntries.sort((a, b) => {
         const [dayA, monthA, yearA] = a.date.split('/').map(Number);
         const [dayB, monthB, yearB] = b.date.split('/').map(Number);
         const dateA = new Date(2000 + yearA, monthA - 1, dayA);
@@ -41,14 +40,9 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         return dateA.getTime() - dateB.getTime();
       });
 
-      // Store all entries for closing balance calculation
-      setAllEntries(sortedEntries);
-
-      // Show only the most recent 20 entries (last 20 after sorting)
-      const recent = sortedEntries.slice(-20);
-
-      // Force update by creating new array
-      setRecentEntries(recent.map(entry => ({ ...entry })));
+      // Force update by creating new array with all sorted entries
+      // This is needed for correct closing balance calculation
+      setRecentEntries(sortedEntries.map(entry => ({ ...entry })));
     } catch (error) {
       console.error('Error loading recent entries:', error);
     }
@@ -175,16 +169,20 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
     setTimeout(() => setSuccessMessage(''), 3000);
   };
 
-  // Filter entries based on search
-  const filteredEntries = recentEntries.filter((entry) => {
-    if (!searchQuery) return true;
-    return (
-      entry.head_of_accounts.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.cheque_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.date.includes(searchQuery)
-    );
-  });
+  // Filter entries based on search and limit to recent 20
+  const filteredEntries = recentEntries
+    .filter((entry) => {
+      if (!searchQuery) return true;
+      return (
+        entry.head_of_accounts.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.cheque_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        entry.date.includes(searchQuery)
+      );
+    });
+
+  // For display, show only the last 20 entries (most recent)
+  const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(-20);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -241,7 +239,7 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         </div>
 
         <div className="flex-1 overflow-auto">
-          {filteredEntries.length === 0 ? (
+          {displayEntries.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               <div className="text-center">
                 <p className="text-sm font-medium">{searchQuery ? 'No matching entries' : 'No entries yet'}</p>
@@ -281,10 +279,10 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
                 </tr>
               </thead>
               <tbody>
-                {filteredEntries.map((entry) => {
-                  // Find the actual index in allEntries for correct closing balance
-                  const actualIndex = allEntries.findIndex(e => e.id === entry.id);
-                  const closingBalance = actualIndex >= 0 ? calculateClosingBalance(allEntries, actualIndex) : null;
+                {displayEntries.map((entry) => {
+                  // Find the index in the full filteredEntries array for correct closing balance
+                  const fullIndex = filteredEntries.findIndex(e => e.id === entry.id);
+                  const closingBalance = calculateClosingBalance(filteredEntries, fullIndex);
                   const rowBgColor =
                     entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
 
