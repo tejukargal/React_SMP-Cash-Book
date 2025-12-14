@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "nile-database": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:\\Users\\Lekhana\\AppData\\Roaming\\npm\\node_modules\\@niledatabase\\nile-mcp-server\\dist\\index.js"],
+      "env": {
+        "NILE_API_KEY": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL3RoZW5pbGUuZGV2IiwiYXVkIjpbIm5pbGUiLCJ3b3Jrc3BhY2U6MDE5OWVlMWEtYmUzYS03Y2JmLWFjMDYtMzg4NDhlNWFiOWY4Il0sImlhdCI6MTc2MDcxNjk2OCwiZXhwIjoyMDc2MTA1NTk5LCJzdWIiOiIwMTk5ZWUzMC1lNDVkLTdhMzktOWI5Ni05YTc0M2YxZWRlYzYiLCJqdGkiOiJkN2IxYTQ2MS0wZjk2LTQyZDQtOTRhYy03MzFmYWQyNzE0OGEiLCJzY29wZSI6ImFwaSIsImF1dGhvcml6ZWRfc2NvcGVzIjoiYWxsIn0.mvS-NKooagU6Dqc5tHu6nLYB3YlUX5d4tpXxPkjNR-x-4ukhtN8TS_njosprj0RQD-0TahApylbMTCBz9MwIcHsW2FooqD8jIrN-FDcFCBfSOOAObBz1ESNRELcXMOTtNIidGf7EEdXkFk0R7CBKtj0Ew4ervd_ZCxwYatsAeCAd8rflfUDCJzs-1pxYr9I50FaPCSTcnnWE37af5rnmuGeiI0bDLsbvU2ob2RN0jzQmbm597Zbpr6Ws5eCQZ4z_pKo1FU3vEtUOr8M2252rTWEzskeApi1v7_C9qaYVFXr0hvq2MFxw_M7TA1qXkNS-tR1qPssRhZQQIgJLLc2TGQ",
+        "NILE_WORKSPACE_SLUG":"thejaraj"
+      }
+    }
+  }
+}

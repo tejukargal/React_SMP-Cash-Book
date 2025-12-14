@@ -1,0 +1,260 @@
+================================================================================
+  SMP CASH BOOK - QUICK START GUIDE
+  Sanjay Memorial Polytechnic, Sagar
+================================================================================
+
+WHAT IS THIS APPLICATION?
+--------------------------
+A desktop-first cash book management system for tracking receipts and payments
+with features like:
+- Easy Receipt/Payment entry
+- Automatic date filling
+- Autocomplete for previous entries
+- Running balance calculation
+- Connected to Nile PostgreSQL Database
+
+================================================================================
+
+HOW TO RUN THE APPLICATION
+---------------------------
+
+OPTION 1: Double-Click the BAT File (EASIEST)
+----------------------------------------------
+1. Locate the file: START_SMP_CASHBOOK.bat
+2. Double-click it
+3. Wait 10 seconds for both servers to start
+4. Browser will open automatically at http://localhost:5173
+5. Start using the Cash Book!
+
+OPTION 2: Manual Start
+-----------------------
+1. Open Command Prompt #1:
+   - Navigate to: smp-cashbook-backend
+   - Run: npm start
+
+2. Open Command Prompt #2:
+   - Navigate to: smp-cashbook
+   - Run: npm run dev
+
+3. Open browser to: http://localhost:5173
+
+================================================================================
+
+HOW TO STOP THE APPLICATION
+----------------------------
+
+OPTION 1: Using STOP Bat File
+------------------------------
+1. Double-click: STOP_SMP_CASHBOOK.bat
+2. All servers will be stopped automatically
+
+OPTION 2: Manual Stop
+---------------------
+1. Go to each Command Prompt window
+2. Press Ctrl+C
+3. Type 'Y' and press Enter
+4. Close the windows
+
+================================================================================
+
+HOW TO USE THE CASH BOOK
+-------------------------
+
+ADDING A RECEIPT:
+1. Click the green "Receipt" button
+2. Fill in the form:
+   - Date: Auto-filled from last entry (format: dd/mm/yy)
+   - Cheque No: Optional
+   - Amount: Required (positive number)
+   - Head of Accounts: Required (autocomplete available)
+   - Notes: Optional
+3. Click "Save Receipt"
+
+ADDING A PAYMENT:
+1. Click the red "Payment" button
+2. Fill in the form (same as receipt)
+3. Click "Save Payment"
+
+EDITING AN ENTRY:
+1. Find the entry in the table below
+2. Click "Edit" button on the right
+3. Modify the fields
+4. Click "Save" button
+
+DELETING AN ENTRY:
+1. Find the entry in the table
+2. Click "Delete" button
+3. Confirm deletion
+
+================================================================================
+
+FEATURES
+--------
+
+✓ Color-Coded Entries:
+  - Green rows = Receipts (money in)
+  - Red rows = Payments (money out)
+
+✓ Running Balance:
+  - Shows balance after each transaction
+  - Automatically calculated
+
+✓ Autocomplete:
+  - Start typing in any field
+  - Previous entries will be suggested
+  - Press Arrow keys to navigate suggestions
+  - Press Enter to select
+
+✓ Smart Date Entry:
+  - Auto-fills from last entry date
+  - Format: dd/mm/yy (example: 12/12/24)
+  - Validates date automatically
+
+✓ Duplicate Detection:
+  - Warns if similar entry was made within 5 seconds
+  - Prevents accidental duplicates
+
+✓ Summary Footer:
+  - Total Receipts
+  - Total Payments
+  - Net Balance (Receipts - Payments)
+
+================================================================================
+
+DATABASE INFORMATION
+--------------------
+
+Backend: Node.js Express API
+Database: Nile PostgreSQL (smp_cashbook)
+Region: AWS US-WEST-2
+Connection: Secure SSL connection
+
+All data is stored in the Nile cloud database and is:
+- Automatically backed up
+- Accessible from any computer on the network
+- Secure and encrypted
+
+================================================================================
+
+TROUBLESHOOTING
+---------------
+
+PROBLEM: Blank white screen
+SOLUTION:
+- Make sure backend server is running first
+- Wait 10 seconds after starting
+- Refresh the browser (F5)
+- Check if port 3001 and 5173 are not blocked
+
+PROBLEM: "Failed to fetch entries" error
+SOLUTION:
+- Check if backend server is running
+- Look for green checkmark: "Connected to Nile Database"
+- Check internet connection (Nile requires internet)
+
+PROBLEM: Port already in use
+SOLUTION:
+- Run STOP_SMP_CASHBOOK.bat first
+- Then run START_SMP_CASHBOOK.bat again
+- Or restart your computer
+
+PROBLEM: Cannot connect to database
+SOLUTION:
+- Check internet connection
+- Verify .env file in smp-cashbook-backend folder
+- Contact system administrator
+
+================================================================================
+
+FILE STRUCTURE
+--------------
+
+React_Cash Book/
+├── START_SMP_CASHBOOK.bat          ← Double-click to start
+├── STOP_SMP_CASHBOOK.bat           ← Double-click to stop
+├── QUICK_START_GUIDE.txt           ← This file
+│
+├── smp-cashbook/                   ← Frontend (React App)
+│   ├── src/
+│   │   ├── components/             ← UI Components
+│   │   ├── services/               ← API Connection
+│   │   └── utils/                  ← Helper Functions
+│   └── package.json
+│
+└── smp-cashbook-backend/           ← Backend (API Server)
+    ├── server.js                   ← Main server file
+    ├── .env                        ← Database credentials
+    └── package.json
+
+================================================================================
+
+KEYBOARD SHORTCUTS
+------------------
+
+Tab             - Move to next field
+Shift+Tab       - Move to previous field
+Arrow Up/Down   - Navigate autocomplete suggestions
+Enter           - Select suggestion / Submit form
+Escape          - Close autocomplete / Cancel form
+Ctrl+R          - Refresh page (reload entries)
+
+================================================================================
+
+TECHNICAL SUPPORT
+-----------------
+
+For technical assistance:
+1. Check this guide first
+2. Review error messages in the command prompt windows
+3. Contact IT Department
+4. Email: support@smpoly.edu.in (example)
+
+================================================================================
+
+VERSION INFORMATION
+-------------------
+
+Application: SMP Cash Book v1.0
+Frontend: React 18 + TypeScript + Vite + Tailwind CSS
+Backend: Node.js + Express + PostgreSQL
+Database: Nile Database (PostgreSQL)
+Created: December 2024
+
+================================================================================
+
+IMPORTANT NOTES
+---------------
+
+1. ALWAYS use START_SMP_CASHBOOK.bat to run the application
+2. ALWAYS use STOP_SMP_CASHBOOK.bat to stop properly
+3. Keep both command prompt windows open while using
+4. DO NOT close browser accidentally - just minimize it
+5. Data is automatically saved to database
+6. Date format must be: dd/mm/yy (example: 25/12/24)
+7. Amount must be positive number (no negative values)
+8. Internet connection required (for Nile Database)
+
+================================================================================
+
+FIRST TIME SETUP (Already Done)
+--------------------------------
+
+The following have been pre-configured:
+✓ Node.js and npm installed
+✓ All dependencies installed
+✓ Nile Database created and configured
+✓ Database table created with proper schema
+✓ Backend server configured
+✓ Frontend application configured
+✓ Connection between frontend and backend established
+
+Just run START_SMP_CASHBOOK.bat and start using!
+
+================================================================================
+
+ENJOY USING SMP CASH BOOK!
+
+For Sanjay Memorial Polytechnic, Sagar
+Simplifying Cash Book Management
+
+================================================================================

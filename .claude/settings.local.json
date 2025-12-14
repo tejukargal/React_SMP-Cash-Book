@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node_modules.bintailwindcss init -p)",
+      "Bash(npm start)",
+      "Bash(if exist \".vite\" rmdir /s /q \".vite\")",
+      "Bash(if exist \"node_modules\\.vite\" rmdir /s /q \"node_modules\\.vite\")",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(netstat:*)",
+      "Bash(del \"D:\\Apps\\React_Cash Book\\test-import.json\")",
+      "Bash(taskkill:*)",
+      "Bash(timeout 2 node:*)",
+      "Bash(node server.js:*)",
+      "Bash(timeout:*)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "nile-database"
+  ]
+}

@@ -1,0 +1,340 @@
+import { useState, useEffect } from 'react';
+import TypeSelection from '../components/TypeSelection';
+import EntryForm from '../components/EntryForm';
+import type { CashEntry, EntryType, EntryFormData, AppStep } from '../types';
+import { getTodayDate, formatAmount, calculateRunningBalance } from '../utils/helpers';
+import { db } from '../services/database';
+import { getFinancialYearDisplay } from '../utils/financialYear';
+
+interface EntryPageProps {
+  selectedFY: string;
+  onNavigate?: (page: 'transactions') => void;
+}
+
+export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
+  const [currentStep, setCurrentStep] = useState<AppStep>('select-type');
+  const [selectedType, setSelectedType] = useState<EntryType | null>(null);
+  const [recentEntries, setRecentEntries] = useState<CashEntry[]>([]);
+  const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
+  const [editData, setEditData] = useState<{ id: string; formData: EntryFormData } | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // Load recent entries on mount and when FY changes
+  useEffect(() => {
+    loadRecentEntries();
+    loadMostRecentDate();
+  }, [selectedFY]);
+
+  const loadRecentEntries = async () => {
+    try {
+      // Always fetch fresh data without FY filter for new entries page
+      const allEntries = await db.getAllEntries(selectedFY);
+      // Show only the most recent 20 entries
+      const recent = allEntries.slice(0, 20);
+      // Force update by creating new array
+      setRecentEntries(recent.map(entry => ({ ...entry })));
+    } catch (error) {
+      console.error('Error loading recent entries:', error);
+    }
+  };
+
+  const loadMostRecentDate = async () => {
+    const recentDate = await db.getMostRecentDate();
+    if (recentDate) {
+      setDefaultDate(recentDate);
+    }
+  };
+
+  const handleSelectType = (type: EntryType) => {
+    setSelectedType(type);
+    setEditData(null);
+    setCurrentStep('fill-form');
+  };
+
+  const handleSave = async (type: EntryType, formData: EntryFormData, editId?: string) => {
+    try {
+      if (editId) {
+        // Update existing entry
+        await db.updateEntry(editId, formData);
+        showSuccessMessage('Entry updated successfully!');
+
+        // Reload entries and reset form
+        await loadRecentEntries();
+        handleCancel();
+      } else {
+        // Check for duplicates before creating new entry
+        const allEntries = await db.getAllEntries();
+        const amount = parseFloat(formData.amount);
+
+        const duplicateEntry = allEntries.find(existing => {
+          return (
+            existing.date === formData.date &&
+            existing.type === type &&
+            existing.head_of_accounts === formData.head_of_accounts &&
+            Math.abs(existing.amount - amount) < 0.01 &&
+            existing.notes === formData.notes &&
+            existing.cheque_no === formData.cheque_no
+          );
+        });
+
+        if (duplicateEntry) {
+          const proceed = window.confirm(
+            `⚠️ Duplicate Entry Found!\n\nA similar entry already exists:\n` +
+            `Date: ${duplicateEntry.date}\n` +
+            `Type: ${duplicateEntry.type === 'receipt' ? 'Receipt' : 'Payment'}\n` +
+            `Cheque No: ${duplicateEntry.cheque_no || '-'}\n` +
+            `Amount: ${formatAmount(duplicateEntry.amount)}\n` +
+            `Head of Account: ${duplicateEntry.head_of_accounts}\n` +
+            `Notes: ${duplicateEntry.notes || '-'}\n\n` +
+            `Do you want to create this entry anyway?`
+          );
+
+          if (!proceed) {
+            return; // Cancel the save operation
+          }
+        }
+
+        // Create new entry
+        const newEntry = await db.createEntry(type, formData);
+
+        // Update default date for next entry
+        setDefaultDate(formData.date);
+
+        // Clear search query to show all entries
+        setSearchQuery('');
+
+        // Reset form
+        handleCancel();
+
+        // Reload entries immediately
+        await loadRecentEntries();
+
+        // Show success message after reload completes
+        showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`);
+      }
+    } catch (error) {
+      console.error('Error saving entry:', error);
+      alert('Failed to save entry. Please try again.');
+    }
+  };
+
+  const handleCancel = () => {
+    setCurrentStep('select-type');
+    setSelectedType(null);
+    setEditData(null);
+  };
+
+  const handleEdit = (entry: CashEntry) => {
+    const formData: EntryFormData = {
+      date: entry.date,
+      cheque_no: entry.cheque_no || '',
+      amount: entry.amount.toString(),
+      head_of_accounts: entry.head_of_accounts,
+      notes: entry.notes || '',
+    };
+
+    setEditData({ id: entry.id, formData });
+    setSelectedType(entry.type);
+    setCurrentStep('fill-form');
+
+    // Scroll to top to show form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (id: string, head: string) => {
+    if (confirm(`Are you sure you want to delete the entry for "${head}"?`)) {
+      try {
+        await db.deleteEntry(id);
+        showSuccessMessage('Entry deleted successfully!');
+        await loadRecentEntries();
+      } catch (error) {
+        console.error('Error deleting entry:', error);
+        alert('Failed to delete entry. Please try again.');
+      }
+    }
+  };
+
+  const showSuccessMessage = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
+  // Filter entries based on search
+  const filteredEntries = recentEntries.filter((entry) => {
+    if (!searchQuery) return true;
+    return (
+      entry.head_of_accounts.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.cheque_no?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      entry.date.includes(searchQuery)
+    );
+  });
+
+  return (
+    <div className="flex flex-col h-full bg-gray-50">
+      {/* Success Message */}
+      {successMessage && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-2 py-1.5 m-2 rounded relative animate-fade-in text-xs">
+          <span className="block sm:inline">{successMessage}</span>
+        </div>
+      )}
+
+      {/* Entry Form Section */}
+      <div className="bg-white shadow-sm m-2 rounded-lg">
+        {currentStep === 'select-type' ? (
+          <TypeSelection onSelectType={handleSelectType} />
+        ) : selectedType ? (
+          <div className="px-3 py-2">
+            <EntryForm
+              selectedType={selectedType}
+              initialDate={defaultDate}
+              editData={editData}
+              onSave={handleSave}
+              onCancel={handleCancel}
+            />
+          </div>
+        ) : null}
+      </div>
+
+      {/* Recent 20 Transactions */}
+      <div className="flex-1 bg-white shadow-sm mx-2 mb-2 rounded-lg overflow-hidden flex flex-col">
+        <div className="bg-gray-100 border-b border-gray-300 px-3 py-1.5 flex justify-between items-center">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-800">Recent Transactions (Last 20)</h2>
+            <p className="text-xs text-gray-600">FY: {getFinancialYearDisplay(selectedFY)}</p>
+          </div>
+          {/* Search */}
+          <div className="flex-1 max-w-sm ml-4">
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+          </div>
+          {/* View Full Transactions Link */}
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('transactions')}
+              className="ml-2 px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors"
+            >
+              View All Transactions
+            </button>
+          )}
+        </div>
+
+        <div className="flex-1 overflow-auto">
+          {filteredEntries.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <div className="text-center">
+                <p className="text-sm font-medium">{searchQuery ? 'No matching entries' : 'No entries yet'}</p>
+                <p className="text-xs mt-1">
+                  {searchQuery ? 'Try a different search term' : 'Click Receipt or Payment above to add your first entry'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <table className="w-full border-collapse">
+              <thead className="bg-gray-200 sticky top-0 z-10">
+                <tr>
+                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Date
+                  </th>
+                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Type
+                  </th>
+                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Cheque No
+                  </th>
+                  <th className="text-right px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Amount
+                  </th>
+                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Head of Accounts
+                  </th>
+                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Notes
+                  </th>
+                  <th className="text-right px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
+                    Balance
+                  </th>
+                  <th className="text-center px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300 w-24">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEntries.map((entry, index) => {
+                  const balance = calculateRunningBalance(filteredEntries, index);
+                  const rowBgColor =
+                    entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
+
+                  return (
+                    <tr
+                      key={entry.id}
+                      className={`${rowBgColor} hover:opacity-80 transition-opacity duration-150 border-b border-gray-200`}
+                      style={{ height: '30px' }}
+                    >
+                      <td className="px-3 py-1 text-sm text-gray-800">{entry.date}</td>
+                      <td className="px-3 py-1 text-sm">
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
+                            entry.type === 'receipt'
+                              ? 'bg-green-200 text-green-800'
+                              : 'bg-red-200 text-red-800'
+                          }`}
+                        >
+                          {entry.type === 'receipt' ? 'R' : 'P'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1 text-sm text-gray-700">
+                        {entry.cheque_no || '-'}
+                      </td>
+                      <td className="px-3 py-1 text-sm text-gray-800 text-right font-medium">
+                        {formatAmount(entry.amount)}
+                      </td>
+                      <td className="px-3 py-1 text-sm text-gray-800">
+                        {entry.head_of_accounts}
+                      </td>
+                      <td className="px-3 py-1 text-sm text-gray-600 truncate max-w-xs">
+                        {entry.notes || '-'}
+                      </td>
+                      <td
+                        className={`px-3 py-1 text-sm text-right font-semibold ${
+                          balance >= 0 ? 'text-green-700' : 'text-red-700'
+                        }`}
+                      >
+                        {formatAmount(balance)}
+                      </td>
+                      <td className="px-3 py-1 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => handleEdit(entry)}
+                            className="text-blue-600 hover:text-blue-800 text-xs font-medium transition-colors duration-150"
+                            title="Edit"
+                          >
+                            Edit
+                          </button>
+                          <span className="text-gray-300 text-xs">|</span>
+                          <button
+                            onClick={() => handleDelete(entry.id, entry.head_of_accounts)}
+                            className="text-red-600 hover:text-red-800 text-xs font-medium transition-colors duration-150"
+                            title="Delete"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
