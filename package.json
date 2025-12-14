@@ -1,0 +1,9 @@
+{
+  "name": "smp-cashbook-monorepo",
+  "version": "1.0.0",
+  "description": "SMP Cash Book - Frontend and Backend",
+  "private": true,
+  "dependencies": {
+    "pg": "^8.11.3"
+  }
+}
