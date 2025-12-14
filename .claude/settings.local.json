@@ -19,7 +19,11 @@
       "Bash(git remote add:*)",
       "Bash(git push:*)",
       "Bash(git pull:*)",
-      "Bash(netlify --version:*)"
+      "Bash(netlify --version:*)",
+      "Bash(netlify status:*)",
+      "Bash(netlify link:*)",
+      "Bash(netlify sites:list:*)",
+      "Bash(netlify deploy:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

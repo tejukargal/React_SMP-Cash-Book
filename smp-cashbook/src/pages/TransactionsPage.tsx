@@ -43,7 +43,7 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSave = async (type: EntryType, formData: EntryFormData, editId?: string) => {
+  const handleSave = async (_type: EntryType, formData: EntryFormData, editId?: string) => {
     try {
       if (editId) {
         await db.updateEntry(editId, formData);

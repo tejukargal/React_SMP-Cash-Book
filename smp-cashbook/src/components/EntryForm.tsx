@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, ChangeEvent, KeyboardEvent, FormEvent } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import type { ChangeEvent, KeyboardEvent, FormEvent } from 'react';
 import type { EntryType, EntryFormData, AutocompleteOption } from '../types';
 import { toProperCase, isValidDate, isValidAmount, autoFormatDateInput } from '../utils/helpers';
 import { db } from '../services/database';
@@ -43,7 +44,7 @@ export default function EntryForm({
 
   const [isValid, setIsValid] = useState(false);
   const amountInputRef = useRef<HTMLInputElement>(null);
-  const suggestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const suggestionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load edit data if editing
   useEffect(() => {

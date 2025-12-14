@@ -96,7 +96,7 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         }
 
         // Create new entry
-        const newEntry = await db.createEntry(type, formData);
+        await db.createEntry(type, formData);
 
         // Update default date for next entry
         setDefaultDate(formData.date);
