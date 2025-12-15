@@ -22,6 +22,9 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
   const [deletePassword, setDeletePassword] = useState<string>('');
   const [deleteError, setDeleteError] = useState<string>('');
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [isBackingUp, setIsBackingUp] = useState<boolean>(false);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+  const [restoreError, setRestoreError] = useState<string>('');
   const financialYears = generateFinancialYears(5, 2);
 
   useEffect(() => {
@@ -84,6 +87,114 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
     setShowDeleteConfirm(false);
     setDeletePassword('');
     setDeleteError('');
+  };
+
+  const handleBackup = async () => {
+    setIsBackingUp(true);
+    try {
+      // Fetch all entries for the selected CB type
+      const entries = await db.getAllEntries(undefined, localCBType);
+
+      // Create backup object with metadata
+      const backup = {
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        cbType: localCBType,
+        count: entries.length,
+        entries: entries,
+      };
+
+      // Convert to JSON and create blob
+      const jsonStr = JSON.stringify(backup, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+
+      // Create download link
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Generate filename with timestamp and CB type
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+      const cbTypeLabel = localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'Both';
+      link.download = `SMP-CashBook-Backup-${cbTypeLabel}-${timestamp}.json`;
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      const cbTypeMsg = localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All (Both Aided & Unaided)';
+      showSuccessMessage(`Backup created successfully! Downloaded ${entries.length} ${cbTypeMsg} entries.`);
+    } catch (error) {
+      console.error('Failed to create backup:', error);
+      showSuccessMessage('Failed to create backup. Please try again.');
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleRestore = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsRestoring(true);
+    setRestoreError('');
+
+    try {
+      // Read file content
+      const fileContent = await file.text();
+      const backup = JSON.parse(fileContent);
+
+      // Validate backup structure
+      if (!backup.version || !backup.entries || !Array.isArray(backup.entries)) {
+        throw new Error('Invalid backup file format');
+      }
+
+      // Check if backup CB type matches current selection
+      if (backup.cbType !== localCBType) {
+        const backupType = backup.cbType === 'aided' ? 'Aided' : backup.cbType === 'unaided' ? 'Unaided' : 'Both';
+        const currentType = localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'Both';
+        setRestoreError(`Warning: Backup is for ${backupType} but current selection is ${currentType}. Please select the correct cashbook type before restoring.`);
+        setIsRestoring(false);
+        event.target.value = ''; // Reset file input
+        return;
+      }
+
+      if (backup.entries.length === 0) {
+        setRestoreError('Backup file contains no entries.');
+        setIsRestoring(false);
+        event.target.value = ''; // Reset file input
+        return;
+      }
+
+      // Prepare entries for bulk import (strip IDs and timestamps)
+      const entriesToImport = backup.entries.map((entry: any) => ({
+        date: entry.date,
+        type: entry.type,
+        cheque_no: entry.cheque_no || '',
+        amount: parseFloat(entry.amount),
+        head_of_accounts: entry.head_of_accounts,
+        notes: entry.notes || '',
+        cb_type: entry.cb_type || localCBType,
+      }));
+
+      // Import entries
+      const result = await db.bulkImport(entriesToImport);
+
+      if (result.success) {
+        const cbTypeMsg = localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All';
+        showSuccessMessage(`Restore completed! Imported ${result.imported} ${cbTypeMsg} entries. ${result.failed > 0 ? `Failed: ${result.failed} entries.` : ''}`);
+      } else {
+        setRestoreError(`Restore failed. Please check the backup file.`);
+      }
+    } catch (error) {
+      console.error('Failed to restore backup:', error);
+      setRestoreError(error instanceof Error ? error.message : 'Failed to restore backup. Please check the file format.');
+    } finally {
+      setIsRestoring(false);
+      event.target.value = ''; // Reset file input
+    }
   };
 
   return (
@@ -193,6 +304,66 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
                 {localCBType === 'aided' && 'Showing only Aided cashbook transactions'}
                 {localCBType === 'unaided' && 'Showing only Unaided cashbook transactions'}
                 {localCBType === 'both' && 'Showing both Aided and Unaided transactions combined'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Backup & Restore Section */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-700 mb-3">Backup & Restore</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Create backups of your cashbook data and restore them when needed. Backups are saved based on the selected cashbook type.
+          </p>
+
+          <div className="grid grid-cols-1 gap-4">
+            {/* Backup Section */}
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
+              <h4 className="text-sm font-semibold text-blue-900 mb-2">Create Backup</h4>
+              <p className="text-xs text-blue-800 mb-3">
+                Download a JSON backup file for <strong>{localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All (Both Aided & Unaided)'}</strong> cashbook entries.
+              </p>
+              <button
+                onClick={handleBackup}
+                disabled={isBackingUp}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+              >
+                {isBackingUp ? 'Creating Backup...' : `Backup ${localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All'} Data`}
+              </button>
+            </div>
+
+            {/* Restore Section */}
+            <div className="bg-green-50 border border-green-200 p-4 rounded-md">
+              <h4 className="text-sm font-semibold text-green-900 mb-2">Restore from Backup</h4>
+              <p className="text-xs text-green-800 mb-3">
+                Upload a backup file to restore <strong>{localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All (Both Aided & Unaided)'}</strong> cashbook entries. The backup must match the selected cashbook type.
+              </p>
+              {restoreError && (
+                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                  {restoreError}
+                </div>
+              )}
+              <label className="inline-block">
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handleRestore}
+                  disabled={isRestoring}
+                  className="hidden"
+                  id="restore-file-input"
+                />
+                <span className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 transition-colors cursor-pointer inline-block disabled:bg-gray-300 disabled:cursor-not-allowed">
+                  {isRestoring ? 'Restoring...' : `Restore ${localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All'} Data`}
+                </span>
+              </label>
+            </div>
+
+            {/* Info Box */}
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-xs text-yellow-800">
+                <strong>Important:</strong> Backups are created separately for Aided, Unaided, and Both (Combined) cashbook types.
+                Make sure to select the correct cashbook type before creating or restoring a backup.
+                Restoring a backup will add entries to the existing data without deleting current entries.
               </p>
             </div>
           </div>
