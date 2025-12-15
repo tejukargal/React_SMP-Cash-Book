@@ -16,6 +16,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
   const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
   const [editData, setEditData] = useState<{ id: string; formData: EntryFormData; type: EntryType } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [successFormType, setSuccessFormType] = useState<EntryType | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [formResetTrigger, setFormResetTrigger] = useState<number>(0);
 
@@ -59,7 +60,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
       if (editId) {
         // Update existing entry
         await db.updateEntry(editId, formData);
-        showSuccessMessage('Entry updated successfully!');
+        showSuccessMessage('Entry updated successfully!', type);
 
         // Reload entries and reset edit mode
         await loadRecentEntries();
@@ -113,7 +114,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
         setFormResetTrigger(prev => prev + 1);
 
         // Show success message after reload completes
-        showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`);
+        showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`, type);
       }
     } catch (error) {
       console.error('Error saving entry:', error);
@@ -154,9 +155,13 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
     }
   };
 
-  const showSuccessMessage = (message: string) => {
+  const showSuccessMessage = (message: string, type: EntryType | null = null) => {
     setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(''), 3000);
+    setSuccessFormType(type);
+    setTimeout(() => {
+      setSuccessMessage('');
+      setSuccessFormType(null);
+    }, 3000);
   };
 
   // Filter entries based on search and limit to recent 20
@@ -176,13 +181,6 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Success Message */}
-      {successMessage && (
-        <div className="bg-green-100 border border-green-400 text-green-700 px-2 py-1.5 m-2 rounded relative animate-fade-in text-xs">
-          <span className="block sm:inline">{successMessage}</span>
-        </div>
-      )}
-
       {/* Entry Forms Section - Receipt and Payment Side by Side */}
       <div className="grid grid-cols-2 gap-2 m-2">
         {/* Receipt Form */}
@@ -196,6 +194,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
             onCancel={handleCancelEdit}
             resetTrigger={formResetTrigger}
             autoFocus={true}
+            successMessage={successFormType === 'receipt' ? successMessage : undefined}
           />
         </div>
 
@@ -210,6 +209,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
             onCancel={handleCancelEdit}
             resetTrigger={formResetTrigger}
             autoFocus={false}
+            successMessage={successFormType === 'payment' ? successMessage : undefined}
           />
         </div>
       </div>
