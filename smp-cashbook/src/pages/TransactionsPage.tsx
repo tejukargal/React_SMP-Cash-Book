@@ -113,33 +113,166 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
     doc.setFontSize(8);
     doc.text(`Sanjay Memorial Polytechnic, Sagar | FY: ${getFinancialYearDisplay(selectedFY)}`, 148, 17, { align: 'center' });
 
-    // Prepare table data
-    const tableData: any[] = [];
-    filteredEntries.forEach((entry) => {
-      tableData.push([
-        entry.date,
-        entry.type === 'receipt' ? 'R' : 'P',
-        entry.cheque_no || '',
-        formatAmount(entry.amount),
-        entry.head_of_accounts,
-        entry.notes || '',
-      ]);
-    });
+    if (cbReport2View) {
+      // CB Report 2 format - Traditional Cash Book
+      const tableData: any[] = [];
+      let runningBalance = 0;
 
-    autoTable(doc, {
-      head: [['Date', 'Type', 'Cheque No', 'Amount', 'Head of Accounts', 'Notes']],
-      body: tableData,
-      startY: 22,
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [66, 139, 202] },
-    });
+      const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+        const [dayA, monthA, yearA] = a.split('/').map(Number);
+        const [dayB, monthB, yearB] = b.split('/').map(Number);
+        const dateA = new Date(2000 + yearA, monthA - 1, dayA);
+        const dateB = new Date(2000 + yearB, monthB - 1, dayB);
+        return dateA.getTime() - dateB.getTime();
+      });
 
-    // Add totals
-    const finalY = (doc as any).lastAutoTable.finalY;
-    doc.setFontSize(10);
-    doc.text(`Total Receipts: ${formatAmount(totalReceipts)}`, 14, finalY + 10);
-    doc.text(`Total Payments: ${formatAmount(totalPayments)}`, 14, finalY + 17);
-    doc.text(`Net Balance: ${formatAmount(netBalance)}`, 14, finalY + 24);
+      sortedDates.forEach((date, groupIndex) => {
+        const group = groupedByDate[date];
+        const dateReceipts = group.receipts.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+        const datePayments = group.payments.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+
+        // By Opening Balance row (skip for first date)
+        if (groupIndex > 0) {
+          tableData.push([
+            '',
+            '',
+            'By Opening Bal',
+            formatAmount(runningBalance),
+            '',
+            '',
+            '',
+            '',
+          ]);
+        }
+
+        // Transaction rows
+        const maxRows = Math.max(group.receipts.length, group.payments.length);
+        for (let i = 0; i < maxRows; i++) {
+          const receipt = group.receipts[i];
+          const payment = group.payments[i];
+
+          tableData.push([
+            receipt?.date || '',
+            receipt?.head_of_accounts || '',
+            receipt?.notes || '',
+            receipt ? formatAmount(receipt.amount) : '',
+            payment?.date || '',
+            payment?.head_of_accounts || '',
+            payment?.notes || '',
+            payment ? formatAmount(payment.amount) : '',
+          ]);
+        }
+
+        // Total row
+        const previousBalance = runningBalance;
+        const totalReceipts = dateReceipts + (groupIndex > 0 ? previousBalance : 0);
+        tableData.push([
+          '',
+          '',
+          'Total',
+          formatAmount(totalReceipts),
+          date,
+          '',
+          'Total',
+          formatAmount(datePayments),
+        ]);
+
+        runningBalance += dateReceipts - datePayments;
+
+        // Closing balance rows
+        tableData.push([
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          'Closing Bal',
+          formatAmount(runningBalance),
+        ]);
+
+        tableData.push([
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          formatAmount(datePayments + runningBalance),
+        ]);
+
+        // Empty row
+        tableData.push(['', '', '', '', '', '', '', '']);
+      });
+
+      autoTable(doc, {
+        head: [[
+          'R.Date',
+          'R.Heads',
+          'R.Notes',
+          'R.Amount',
+          'P.Date',
+          'P.Heads',
+          'P.Notes',
+          'P.Amount',
+        ]],
+        body: tableData,
+        startY: 22,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.5,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+          minCellHeight: 8,
+        },
+        headStyles: {
+          fillColor: [100, 100, 100],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 9,
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, // R.Date
+          1: { cellWidth: 35 }, // R.Heads
+          2: { cellWidth: 30 }, // R.Notes
+          3: { cellWidth: 25, halign: 'right' }, // R.Amount
+          4: { cellWidth: 20 }, // P.Date
+          5: { cellWidth: 35 }, // P.Heads
+          6: { cellWidth: 30 }, // P.Notes
+          7: { cellWidth: 25, halign: 'right' }, // P.Amount
+        },
+      });
+    } else {
+      // Regular format
+      const tableData: any[] = [];
+      filteredEntries.forEach((entry) => {
+        tableData.push([
+          entry.date,
+          entry.type === 'receipt' ? 'R' : 'P',
+          entry.cheque_no || '',
+          formatAmount(entry.amount),
+          entry.head_of_accounts,
+          entry.notes || '',
+        ]);
+      });
+
+      autoTable(doc, {
+        head: [['Date', 'Type', 'Cheque No', 'Amount', 'Head of Accounts', 'Notes']],
+        body: tableData,
+        startY: 22,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [66, 139, 202] },
+      });
+
+      // Add totals
+      const finalY = (doc as any).lastAutoTable.finalY;
+      doc.setFontSize(10);
+      doc.text(`Total Receipts: ${formatAmount(totalReceipts)}`, 14, finalY + 10);
+      doc.text(`Total Payments: ${formatAmount(totalPayments)}`, 14, finalY + 17);
+      doc.text(`Net Balance: ${formatAmount(netBalance)}`, 14, finalY + 24);
+    }
 
     doc.save(`All_Transactions_${selectedFY}.pdf`);
   };
