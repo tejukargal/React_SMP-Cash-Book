@@ -29,6 +29,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
     try {
       // Fetch entries filtered by FY and CB Type
       const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
+      console.log('🔍 EntryPage - Loaded entries:', allEntries.length, 'entries for FY:', selectedFY, 'CB Type:', selectedCBType);
 
       // Sort entries oldest to newest
       const sortedEntries = allEntries.sort((a, b) => {
@@ -42,6 +43,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
       // Force update by creating new array with all sorted entries
       // This is needed for correct closing balance calculation
       setRecentEntries(sortedEntries.map(entry => ({ ...entry })));
+      console.log('🔍 EntryPage - Set recentEntries state with', sortedEntries.length, 'entries');
     } catch (error) {
       console.error('Error loading recent entries:', error);
     }
@@ -174,6 +176,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
   // For display, show only the last 5 entries (most recent) in reverse order (newest to oldest)
   const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(-5).reverse();
+  console.log('🔍 EntryPage - Displaying', displayEntries.length, 'entries (total filtered:', filteredEntries.length, ', total recent:', recentEntries.length, ')');
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
