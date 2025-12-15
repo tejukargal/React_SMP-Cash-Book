@@ -13,7 +13,6 @@ interface EntryFormProps {
   onCancel: () => void;
   resetTrigger?: number;
   autoFocus?: boolean;
-  successMessage?: string;
 }
 
 export default function EntryForm({
@@ -25,7 +24,6 @@ export default function EntryForm({
   onCancel,
   resetTrigger = 0,
   autoFocus = false,
-  successMessage,
 }: EntryFormProps) {
   // Helper function to convert CBType to actual cb_type for entries
   const getActualCBType = (cbType: CBType): 'aided' | 'unaided' => {
@@ -311,30 +309,21 @@ export default function EntryForm({
 
   return (
     <div className={`bg-white border-l-4 ${borderColor} shadow-md p-2 mb-2`}>
-      {/* Header with Success Message */}
-      <div className={`flex items-center justify-between mb-2 ${successMessage ? `${bgColor} -mx-2 -mt-2 px-2 py-1.5 rounded-t` : ''}`}>
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <h3 className={`text-sm font-semibold ${successMessage ? 'text-white' : 'text-gray-700'}`}>
-            {successMessage ? (
-              <span>{successMessage}</span>
-            ) : (
-              <>
-                {editData ? 'Edit' : 'New'}{' '}
-                <span className={`text-${accentColor}-600 capitalize`}>{selectedType}</span>
-              </>
-            )}
+          <h3 className="text-sm font-semibold text-gray-700">
+            {editData ? 'Edit' : 'New'}{' '}
+            <span className={`text-${accentColor}-600 capitalize`}>{selectedType}</span>
           </h3>
-          {!successMessage && (
-            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-              formData.cb_type === 'aided'
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'
-            }`}>
-              {formData.cb_type === 'aided' ? '🟢 Aided' : '🟡 Unaided'}
-            </span>
-          )}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+            formData.cb_type === 'aided'
+              ? 'bg-green-100 text-green-700'
+              : 'bg-yellow-100 text-yellow-700'
+          }`}>
+            {formData.cb_type === 'aided' ? '🟢 Aided' : '🟡 Unaided'}
+          </span>
         </div>
-        {!successMessage && editData && (
+        {editData && (
           <span className="text-[10px] text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
             Editing Entry
           </span>

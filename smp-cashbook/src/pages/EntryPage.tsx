@@ -9,14 +9,13 @@ interface EntryPageProps {
   selectedFY: string;
   selectedCBType: CBType;
   onNavigate?: (page: 'transactions') => void;
+  onSuccessMessage?: (message: string) => void;
 }
 
-export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: EntryPageProps) {
+export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSuccessMessage }: EntryPageProps) {
   const [recentEntries, setRecentEntries] = useState<CashEntry[]>([]);
   const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
   const [editData, setEditData] = useState<{ id: string; formData: EntryFormData; type: EntryType } | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string>('');
-  const [successFormType, setSuccessFormType] = useState<EntryType | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [formResetTrigger, setFormResetTrigger] = useState<number>(0);
 
@@ -60,7 +59,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
       if (editId) {
         // Update existing entry
         await db.updateEntry(editId, formData);
-        showSuccessMessage('Entry updated successfully!', type);
+        showSuccessMessage('Entry updated successfully!');
 
         // Reload entries and reset edit mode
         await loadRecentEntries();
@@ -114,7 +113,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
         setFormResetTrigger(prev => prev + 1);
 
         // Show success message after reload completes
-        showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`, type);
+        showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`);
       }
     } catch (error) {
       console.error('Error saving entry:', error);
@@ -155,13 +154,10 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
     }
   };
 
-  const showSuccessMessage = (message: string, type: EntryType | null = null) => {
-    setSuccessMessage(message);
-    setSuccessFormType(type);
-    setTimeout(() => {
-      setSuccessMessage('');
-      setSuccessFormType(null);
-    }, 3000);
+  const showSuccessMessage = (message: string) => {
+    if (onSuccessMessage) {
+      onSuccessMessage(message);
+    }
   };
 
   // Filter entries based on search and limit to recent 20
@@ -194,7 +190,6 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
             onCancel={handleCancelEdit}
             resetTrigger={formResetTrigger}
             autoFocus={true}
-            successMessage={successFormType === 'receipt' ? successMessage : undefined}
           />
         </div>
 
@@ -209,7 +204,6 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: En
             onCancel={handleCancelEdit}
             resetTrigger={formResetTrigger}
             autoFocus={false}
-            successMessage={successFormType === 'payment' ? successMessage : undefined}
           />
         </div>
       </div>

@@ -19,6 +19,7 @@ function App() {
   const [selectedCBType, setSelectedCBType] = useState<CBType>(() => {
     return (localStorage.getItem('selectedCBType') as CBType) || 'both';
   });
+  const [successMessage, setSuccessMessage] = useState<string>('');
 
   const handleNavigate = (page: AppPage) => {
     setCurrentPage(page);
@@ -43,6 +44,13 @@ function App() {
     }
   };
 
+  const handleSuccessMessage = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => {
+      setSuccessMessage('');
+    }, 3000);
+  };
+
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
@@ -54,7 +62,7 @@ function App() {
         <header className="bg-blue-600 text-white py-2 px-4 shadow-md">
           <h1 className="text-lg font-bold">
             {currentPage === 'dashboard' && 'Dashboard'}
-            {currentPage === 'entry' && 'New Entry'}
+            {currentPage === 'entry' && (successMessage || 'New Entry')}
             {currentPage === 'transactions' && 'All Transactions'}
             {currentPage === 'ledgers' && 'Ledgers'}
             {currentPage === 'reports' && 'Reports & Analytics'}
@@ -64,7 +72,7 @@ function App() {
           </h1>
           <p className="text-xs text-blue-100">
             {currentPage === 'dashboard' && 'Overview of your cash book with summaries and quick search'}
-            {currentPage === 'entry' && 'Create new receipt or payment entries'}
+            {currentPage === 'entry' && !successMessage && 'Create new receipt or payment entries'}
             {currentPage === 'transactions' && 'View, edit, and manage all transactions'}
             {currentPage === 'ledgers' && 'View receipt and payment ledgers with transaction details'}
             {currentPage === 'reports' && 'Financial reports and analytics'}
@@ -77,7 +85,7 @@ function App() {
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto">
           {currentPage === 'dashboard' && <DashboardPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} />}
-          {currentPage === 'entry' && <EntryPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} />}
+          {currentPage === 'entry' && <EntryPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} onSuccessMessage={handleSuccessMessage} />}
           {currentPage === 'transactions' && <TransactionsPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} />}
           {currentPage === 'ledgers' && <LedgersPage selectedFY={selectedFY} selectedCBType={selectedCBType} />}
           {currentPage === 'reports' && <ReportsPage selectedFY={selectedFY} selectedCBType={selectedCBType} />}
