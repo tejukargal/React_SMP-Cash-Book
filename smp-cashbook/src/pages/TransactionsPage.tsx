@@ -235,13 +235,42 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
         },
         columnStyles: {
           0: { cellWidth: 20 }, // R.Date
-          1: { cellWidth: 35 }, // R.Heads
-          2: { cellWidth: 30 }, // R.Notes
-          3: { cellWidth: 25, halign: 'right' }, // R.Amount
+          1: { cellWidth: 46 }, // R.Heads
+          2: { cellWidth: 46 }, // R.Notes
+          3: { cellWidth: 24, halign: 'right' }, // R.Amount
           4: { cellWidth: 20 }, // P.Date
-          5: { cellWidth: 35 }, // P.Heads
-          6: { cellWidth: 30 }, // P.Notes
-          7: { cellWidth: 25, halign: 'right' }, // P.Amount
+          5: { cellWidth: 46 }, // P.Heads
+          6: { cellWidth: 46 }, // P.Notes
+          7: { cellWidth: 24, halign: 'right' }, // P.Amount
+        },
+        didParseCell: (data) => {
+          // Remove all default background colors
+          if (data.section === 'body') {
+            data.cell.styles.fillColor = [255, 255, 255]; // White background
+          }
+
+          // Check if any cell in this row contains "Total"
+          const rowData = tableData[data.row.index];
+          const isTotalRow = rowData && (rowData[2] === 'Total' || rowData[6] === 'Total');
+
+          // Highlight entire Total row with gray background
+          if (isTotalRow) {
+            data.cell.styles.fillColor = [229, 231, 235]; // Gray
+            data.cell.styles.fontStyle = 'bold';
+          }
+
+          // Check for special cells
+          const cellText = data.cell.text[0];
+
+          // Make "By Opening Bal" bold
+          if (cellText === 'By Opening Bal') {
+            data.cell.styles.fontStyle = 'bold';
+          }
+
+          // Closing Bal styling
+          if (cellText === 'Closing Bal') {
+            data.cell.styles.fontStyle = 'bold';
+          }
         },
       });
     } else {
