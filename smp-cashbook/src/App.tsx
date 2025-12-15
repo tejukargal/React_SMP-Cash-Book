@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Sidebar from './components/Sidebar';
+import DashboardPage from './pages/DashboardPage';
 import EntryPage from './pages/EntryPage';
 import TransactionsPage from './pages/TransactionsPage';
 import LedgersPage from './pages/LedgersPage';
@@ -7,13 +8,16 @@ import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import FeeImportPage from './pages/FeeImportPage';
 import SalaryImportPage from './pages/SalaryImportPage';
-import type { AppPage } from './types';
+import type { AppPage, CBType } from './types';
 import { getCurrentFinancialYear } from './utils/financialYear';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<AppPage>('entry');
+  const [currentPage, setCurrentPage] = useState<AppPage>('dashboard');
   const [selectedFY, setSelectedFY] = useState<string>(() => {
     return localStorage.getItem('selectedFinancialYear') || getCurrentFinancialYear();
+  });
+  const [selectedCBType, setSelectedCBType] = useState<CBType>(() => {
+    return (localStorage.getItem('selectedCBType') as CBType) || 'both';
   });
 
   const handleNavigate = (page: AppPage) => {
@@ -23,8 +27,18 @@ function App() {
   const handleFinancialYearChange = (fy: string) => {
     setSelectedFY(fy);
     // Refresh data when FY changes
-    if (currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports') {
+    if (currentPage === 'dashboard' || currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports') {
       // This will cause a re-render with new FY
+      setCurrentPage(currentPage);
+    }
+  };
+
+  const handleCBTypeChange = (cbType: CBType) => {
+    setSelectedCBType(cbType);
+    localStorage.setItem('selectedCBType', cbType);
+    // Refresh data when CB Type changes
+    if (currentPage === 'dashboard' || currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports') {
+      // This will cause a re-render with new CB Type
       setCurrentPage(currentPage);
     }
   };
@@ -32,13 +46,14 @@ function App() {
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
-      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} />
+      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} selectedCBType={selectedCBType} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="bg-blue-600 text-white py-2 px-4 shadow-md">
           <h1 className="text-lg font-bold">
+            {currentPage === 'dashboard' && 'Dashboard'}
             {currentPage === 'entry' && 'New Entry'}
             {currentPage === 'transactions' && 'All Transactions'}
             {currentPage === 'ledgers' && 'Ledgers'}
@@ -48,6 +63,7 @@ function App() {
             {currentPage === 'salary-import' && 'Import Salary Data'}
           </h1>
           <p className="text-xs text-blue-100">
+            {currentPage === 'dashboard' && 'Overview of your cash book with summaries and quick search'}
             {currentPage === 'entry' && 'Create new receipt or payment entries'}
             {currentPage === 'transactions' && 'View, edit, and manage all transactions'}
             {currentPage === 'ledgers' && 'View receipt and payment ledgers with transaction details'}
@@ -60,13 +76,14 @@ function App() {
 
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto">
-          {currentPage === 'entry' && <EntryPage selectedFY={selectedFY} onNavigate={handleNavigate} />}
-          {currentPage === 'transactions' && <TransactionsPage selectedFY={selectedFY} onNavigate={handleNavigate} />}
-          {currentPage === 'ledgers' && <LedgersPage selectedFY={selectedFY} />}
-          {currentPage === 'reports' && <ReportsPage selectedFY={selectedFY} />}
-          {currentPage === 'settings' && <SettingsPage onFinancialYearChange={handleFinancialYearChange} />}
-          {currentPage === 'import' && <FeeImportPage />}
-          {currentPage === 'salary-import' && <SalaryImportPage />}
+          {currentPage === 'dashboard' && <DashboardPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} />}
+          {currentPage === 'entry' && <EntryPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} />}
+          {currentPage === 'transactions' && <TransactionsPage selectedFY={selectedFY} selectedCBType={selectedCBType} onNavigate={handleNavigate} />}
+          {currentPage === 'ledgers' && <LedgersPage selectedFY={selectedFY} selectedCBType={selectedCBType} />}
+          {currentPage === 'reports' && <ReportsPage selectedFY={selectedFY} selectedCBType={selectedCBType} />}
+          {currentPage === 'settings' && <SettingsPage onFinancialYearChange={handleFinancialYearChange} onCBTypeChange={handleCBTypeChange} selectedCBType={selectedCBType} />}
+          {currentPage === 'import' && <FeeImportPage selectedCBType={selectedCBType} />}
+          {currentPage === 'salary-import' && <SalaryImportPage selectedCBType={selectedCBType} />}
         </div>
 
         {/* Footer */}

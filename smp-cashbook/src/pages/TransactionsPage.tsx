@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import EntryForm from '../components/EntryForm';
-import type { CashEntry, EntryType, EntryFormData } from '../types';
-import { formatAmount, calculateClosingBalance, getTodayDate } from '../utils/helpers';
+import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
+import { formatAmount, calculateClosingBalance, getTodayDate, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import jsPDF from 'jspdf';
@@ -9,24 +9,26 @@ import autoTable from 'jspdf-autotable';
 
 interface TransactionsPageProps {
   selectedFY: string;
+  selectedCBType: CBType;
   onNavigate?: (page: 'entry') => void;
 }
 
-export default function TransactionsPage({ selectedFY, onNavigate }: TransactionsPageProps) {
+export default function TransactionsPage({ selectedFY, selectedCBType, onNavigate }: TransactionsPageProps) {
   const [entries, setEntries] = useState<CashEntry[]>([]);
   const [editData, setEditData] = useState<{ id: string; type: EntryType; formData: EntryFormData } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterType, setFilterType] = useState<'all' | 'receipt' | 'payment'>('all');
   const [splitView, setSplitView] = useState<boolean>(false);
+  const [cbReport2View, setCbReport2View] = useState<boolean>(false);
 
-  // Load all entries on mount and when FY changes
+  // Load all entries on mount and when FY or CB Type changes
   useEffect(() => {
     loadEntries();
-  }, [selectedFY]);
+  }, [selectedFY, selectedCBType]);
 
   const loadEntries = async () => {
-    const allEntries = await db.getAllEntries(selectedFY);
+    const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
     setEntries(allEntries);
   };
 
@@ -37,6 +39,7 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
       amount: entry.amount.toString(),
       head_of_accounts: entry.head_of_accounts,
       notes: entry.notes || '',
+      cb_type: entry.cb_type,
     };
 
     setEditData({ id: entry.id, type: entry.type, formData });
@@ -206,7 +209,7 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
         </div>
       )}
 
-      {/* Add New Transaction Button & Split View Button */}
+      {/* Add New Transaction Button & View Toggle Buttons */}
       {onNavigate && !editData && (
         <div className="mx-2 mt-2 flex gap-2">
           <button
@@ -216,7 +219,10 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
             + Add New Transaction
           </button>
           <button
-            onClick={() => setSplitView(!splitView)}
+            onClick={() => {
+              setSplitView(!splitView);
+              if (!splitView) setCbReport2View(false);
+            }}
             className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
               splitView
                 ? 'bg-purple-600 text-white hover:bg-purple-700'
@@ -224,6 +230,19 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
             }`}
           >
             {splitView ? '📊 Split View (On)' : '📊 Split View'}
+          </button>
+          <button
+            onClick={() => {
+              setCbReport2View(!cbReport2View);
+              if (!cbReport2View) setSplitView(false);
+            }}
+            className={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              cbReport2View
+                ? 'bg-green-600 text-white hover:bg-green-700'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {cbReport2View ? '📖 CB Report 2 (On)' : '📖 CB Report 2'}
           </button>
         </div>
       )}
@@ -237,6 +256,7 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
           <EntryForm
             selectedType={editData.type}
             initialDate={getTodayDate()}
+            selectedCBType={selectedCBType}
             editData={{ id: editData.id, formData: editData.formData }}
             onSave={handleSave}
             onCancel={handleCancel}
@@ -253,8 +273,8 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
               type="text"
               placeholder="Search by head of accounts, notes, cheque no, or date..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+              onChange={(e) => setSearchQuery(toProperCase(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
 
@@ -331,6 +351,186 @@ export default function TransactionsPage({ selectedFY, onNavigate }: Transaction
                 </p>
               </div>
             </div>
+          ) : cbReport2View ? (
+            // CB Report 2 View - Traditional Cash Book Format
+            <table className="w-full border-collapse">
+              <thead className="bg-gray-200 sticky top-0 z-10">
+                <tr>
+                  {/* Receipt Columns */}
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Date
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Heads
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Notes
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Amount
+                  </th>
+                  {/* Payment Columns */}
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Date
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Heads
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Notes
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Amount
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const rows: React.ReactElement[] = [];
+                  let runningBalance = 0;
+
+                  sortedDates.forEach((date, groupIndex) => {
+                    const { receipts, payments } = groupedByDate[date];
+                    const dateReceipts = receipts.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
+                    const datePayments = payments.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
+
+                    // Show "By Opening Bal" row if this is not the first date
+                    if (groupIndex > 0) {
+                      rows.push(
+                        <tr key={`by-opening-${groupIndex}`} className="bg-white">
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-blue-600 font-medium border border-gray-300 bg-green-50">
+                            By Opening Bal
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-blue-600 text-right font-medium border border-gray-300 bg-green-50">
+                            {formatAmount(runningBalance)}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                        </tr>
+                      );
+                    }
+
+                    // Transaction rows
+                    const maxRows = Math.max(receipts.length, payments.length);
+                    for (let i = 0; i < maxRows; i++) {
+                      const receipt = receipts[i];
+                      const payment = payments[i];
+
+                      rows.push(
+                        <tr key={`${groupIndex}-${i}`} className="hover:bg-gray-50">
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                            {receipt?.date || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                            {receipt?.head_of_accounts || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50">
+                            {receipt?.notes || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50">
+                            {receipt ? formatAmount(receipt.amount) : ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                            {payment?.date || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                            {payment?.head_of_accounts || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50">
+                            {payment?.notes || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50">
+                            {payment ? formatAmount(payment.amount) : ''}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // Calculate total including opening balance for receipts
+                    const previousBalance = runningBalance;
+                    const totalReceipts = dateReceipts + (groupIndex > 0 ? previousBalance : 0);
+
+                    // Total row (shaded)
+                    runningBalance += dateReceipts - datePayments;
+                    rows.push(
+                      <tr key={`total-${groupIndex}`} className="bg-gray-200">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
+                          Total
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
+                          {formatAmount(totalReceipts)}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300">
+                          {date}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
+                          Total
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
+                          {formatAmount(datePayments)}
+                        </td>
+                      </tr>
+                    );
+
+                    // Closing balance rows
+                    rows.push(
+                      <tr key={`closing-1-${groupIndex}`} className="bg-white">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 font-medium border border-gray-300 bg-red-50">
+                          Closing Bal
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
+                          {formatAmount(runningBalance)}
+                        </td>
+                      </tr>
+                    );
+
+                    rows.push(
+                      <tr key={`closing-2-${groupIndex}`} className="bg-white">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
+                          {formatAmount(datePayments + runningBalance)}
+                        </td>
+                      </tr>
+                    );
+
+                    // Empty row for spacing
+                    rows.push(
+                      <tr key={`space-${groupIndex}`} className="bg-white">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                      </tr>
+                    );
+                  });
+
+                  return rows;
+                })()}
+              </tbody>
+            </table>
           ) : splitView ? (
             // Split View - Receipts and Payments side by side
             <div className="p-2">

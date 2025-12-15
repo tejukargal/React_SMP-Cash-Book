@@ -12,29 +12,33 @@ export function toProperCase(text: string): string {
     .join(' ');
 }
 
-// Validate date in dd/mm/yy format
+// Validate date in dd/mm/yy or dd/mm/yyyy format
 export function isValidDate(dateStr: string): boolean {
-  // Check format
-  const datePattern = /^(\d{2})\/(\d{2})\/(\d{2})$/;
+  // Check format - accept both yy and yyyy
+  const datePattern = /^(\d{2})\/(\d{2})\/(\d{2}|\d{4})$/;
   const match = dateStr.match(datePattern);
 
   if (!match) return false;
 
   const day = parseInt(match[1], 10);
   const month = parseInt(match[2], 10);
-  const year = parseInt(match[3], 10);
+  let year = parseInt(match[3], 10);
+
+  // Convert 2-digit year to 4-digit year
+  if (year < 100) {
+    year = 2000 + year;
+  }
 
   // Validate ranges
   if (day < 1 || day > 31) return false;
   if (month < 1 || month > 12) return false;
-  if (year < 0 || year > 99) return false;
+  if (year < 1900 || year > 2100) return false;
 
   // Check for valid day in month
-  const fullYear = 2000 + year;
-  const date = new Date(fullYear, month - 1, day);
+  const date = new Date(year, month - 1, day);
 
   return (
-    date.getFullYear() === fullYear &&
+    date.getFullYear() === year &&
     date.getMonth() === month - 1 &&
     date.getDate() === day
   );
@@ -86,6 +90,25 @@ export function formatAmount(amount: number | string): string {
   return numAmount.toFixed(2);
 }
 
+// Normalize date to dd/mm/yy format (convert yyyy to yy)
+export function normalizeDateFormat(dateStr: string): string {
+  // Check if date is in dd/mm/yyyy format
+  const datePattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  const match = dateStr.match(datePattern);
+
+  if (match) {
+    const day = match[1];
+    const month = match[2];
+    const year = match[3];
+    // Convert yyyy to yy
+    const shortYear = year.slice(-2);
+    return `${day}/${month}/${shortYear}`;
+  }
+
+  // Already in dd/mm/yy format or invalid format
+  return dateStr;
+}
+
 // Auto-format date input (add slashes automatically)
 export function autoFormatDateInput(value: string): string {
   // Remove non-numeric characters
@@ -96,8 +119,14 @@ export function autoFormatDateInput(value: string): string {
     return numbers;
   } else if (numbers.length <= 4) {
     return `${numbers.slice(0, 2)}/${numbers.slice(2)}`;
-  } else {
+  } else if (numbers.length <= 6) {
     return `${numbers.slice(0, 2)}/${numbers.slice(2, 4)}/${numbers.slice(4, 6)}`;
+  } else {
+    // Handle 8-digit format (ddmmyyyy) - convert to dd/mm/yy
+    const day = numbers.slice(0, 2);
+    const month = numbers.slice(2, 4);
+    const year = numbers.slice(6, 8); // Take last 2 digits of year
+    return `${day}/${month}/${year}`;
   }
 }
 

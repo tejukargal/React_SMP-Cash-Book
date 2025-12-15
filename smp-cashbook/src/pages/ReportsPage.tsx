@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../services/database';
-import type { CashEntry } from '../types';
+import type { CashEntry, CBType } from '../types';
 import { formatAmount } from '../utils/helpers';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import jsPDF from 'jspdf';
@@ -8,9 +8,10 @@ import autoTable from 'jspdf-autotable';
 
 interface ReportsPageProps {
   selectedFY: string;
+  selectedCBType: CBType;
 }
 
-type ReportType = 'cb-report-1';
+type ReportType = 'cb-report-1' | 'cb-report-2';
 
 interface GroupedEntry {
   date: string;
@@ -18,19 +19,19 @@ interface GroupedEntry {
   payments: CashEntry[];
 }
 
-export default function ReportsPage({ selectedFY }: ReportsPageProps) {
+export default function ReportsPage({ selectedFY, selectedCBType }: ReportsPageProps) {
   const [selectedReport, setSelectedReport] = useState<ReportType>('cb-report-1');
   const [entries, setEntries] = useState<CashEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadEntries();
-  }, [selectedFY]);
+  }, [selectedFY, selectedCBType]);
 
   const loadEntries = async () => {
     setLoading(true);
     try {
-      const allEntries = await db.getAllEntries(selectedFY);
+      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
       setEntries(allEntries);
     } catch (error) {
       console.error('Error loading entries:', error);
@@ -76,43 +77,90 @@ export default function ReportsPage({ selectedFY }: ReportsPageProps) {
   // Export to CSV
   const exportToCSV = () => {
     const groupedData = groupEntriesByDate();
-    let csvContent = 'Sl No,R.Date,R.Chq,R.Amount,R.Heads,R.Notes,P.Date,P.Chq,P.Amount,P.Heads,P.Notes\n';
+    let csvContent = '';
 
-    let slNo = 1;
-    groupedData.forEach((group) => {
-      const maxRows = Math.max(group.receipts.length, group.payments.length);
+    if (selectedReport === 'cb-report-1') {
+      // CB Report 1 format
+      csvContent = 'Sl No,R.Date,R.Chq,R.Amount,R.Heads,R.Notes,P.Date,P.Chq,P.Amount,P.Heads,P.Notes\n';
 
-      for (let i = 0; i < maxRows; i++) {
-        const receipt = group.receipts[i];
-        const payment = group.payments[i];
+      let slNo = 1;
+      groupedData.forEach((group) => {
+        const maxRows = Math.max(group.receipts.length, group.payments.length);
 
-        csvContent += `${slNo},`;
+        for (let i = 0; i < maxRows; i++) {
+          const receipt = group.receipts[i];
+          const payment = group.payments[i];
 
-        // Receipt columns
-        if (receipt) {
-          csvContent += `${receipt.date},${receipt.cheque_no || ''},${receipt.amount},"${receipt.head_of_accounts}","${receipt.notes || ''}",`;
-        } else {
-          csvContent += ',,,,,';
+          csvContent += `${slNo},`;
+
+          // Receipt columns
+          if (receipt) {
+            csvContent += `${receipt.date},${receipt.cheque_no || ''},${receipt.amount},"${receipt.head_of_accounts}","${receipt.notes || ''}",`;
+          } else {
+            csvContent += ',,,,,';
+          }
+
+          // Payment columns
+          if (payment) {
+            csvContent += `${payment.date},${payment.cheque_no || ''},${payment.amount},"${payment.head_of_accounts}","${payment.notes || ''}"`;
+          } else {
+            csvContent += ',,,,';
+          }
+
+          csvContent += '\n';
+          slNo++;
+        }
+      });
+    } else {
+      // CB Report 2 format
+      csvContent = 'R.Date,R.Heads,R.Notes,R.Amount,P.Date,P.Heads,P.Notes,P.Amount\n';
+
+      let runningBalance = 0;
+      const sortedGroupedData = [...groupedData].sort((a, b) => {
+        const dateA = parseDate(a.date);
+        const dateB = parseDate(b.date);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      sortedGroupedData.forEach((group, groupIndex) => {
+        const dateReceipts = group.receipts.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+        const datePayments = group.payments.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+
+        // By Opening Balance row
+        if (groupIndex > 0) {
+          csvContent += `,,"By Opening Bal",${formatAmount(runningBalance)},,,,\n`;
         }
 
-        // Payment columns
-        if (payment) {
-          csvContent += `${payment.date},${payment.cheque_no || ''},${payment.amount},"${payment.head_of_accounts}","${payment.notes || ''}"`;
-        } else {
-          csvContent += ',,,,';
+        // Transaction rows
+        const maxRows = Math.max(group.receipts.length, group.payments.length);
+        for (let i = 0; i < maxRows; i++) {
+          const receipt = group.receipts[i];
+          const payment = group.payments[i];
+
+          csvContent += `${receipt?.date || ''},"${receipt?.head_of_accounts || ''}","${receipt?.notes || ''}",${receipt ? formatAmount(receipt.amount) : ''},`;
+          csvContent += `${payment?.date || ''},"${payment?.head_of_accounts || ''}","${payment?.notes || ''}",${payment ? formatAmount(payment.amount) : ''}\n`;
         }
 
-        csvContent += '\n';
-        slNo++;
-      }
-    });
+        // Total row
+        const previousBalance = runningBalance;
+        const totalReceipts = dateReceipts + (groupIndex > 0 ? previousBalance : 0);
+        csvContent += `,,"Total",${formatAmount(totalReceipts)},${group.date},,"Total",${formatAmount(datePayments)}\n`;
+
+        runningBalance += dateReceipts - datePayments;
+
+        // Closing balance rows
+        csvContent += `,,,,,,,"Closing Bal",${formatAmount(runningBalance)}\n`;
+        csvContent += `,,,,,,,${formatAmount(datePayments + runningBalance)}\n`;
+        csvContent += `,,,,,,,,\n`; // Empty row
+      });
+    }
 
     // Download CSV
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `Cash_Book_Report_${selectedFY}.csv`);
+    link.setAttribute('download', `Cash_Book_Report_${selectedReport}_${selectedFY}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
@@ -131,115 +179,275 @@ export default function ReportsPage({ selectedFY }: ReportsPageProps) {
     doc.text(`Sanjay Memorial Polytechnic, Sagar`, 148, 22, { align: 'center' });
     doc.text(`Financial Year: ${getFinancialYearDisplay(selectedFY)}`, 148, 28, { align: 'center' });
 
-    // Prepare table data
-    const tableData: any[] = [];
-    let slNo = 1;
+    if (selectedReport === 'cb-report-1') {
+      // CB Report 1 format
+      const tableData: any[] = [];
+      let slNo = 1;
 
-    groupedData.forEach((group) => {
-      const maxRows = Math.max(group.receipts.length, group.payments.length);
+      groupedData.forEach((group) => {
+        const maxRows = Math.max(group.receipts.length, group.payments.length);
 
-      for (let i = 0; i < maxRows; i++) {
-        const receipt = group.receipts[i];
-        const payment = group.payments[i];
+        for (let i = 0; i < maxRows; i++) {
+          const receipt = group.receipts[i];
+          const payment = group.payments[i];
+
+          tableData.push([
+            slNo,
+            receipt?.date || '',
+            receipt?.cheque_no || '',
+            receipt ? formatAmount(receipt.amount) : '',
+            receipt?.head_of_accounts || '',
+            receipt?.notes || '',
+            payment?.date || '',
+            payment?.cheque_no || '',
+            payment ? formatAmount(payment.amount) : '',
+            payment?.head_of_accounts || '',
+            payment?.notes || '',
+          ]);
+          slNo++;
+        }
+      });
+
+      // Calculate totals
+      const totalReceipts = entries
+        .filter(e => e.type === 'receipt')
+        .reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+
+      const totalPayments = entries
+        .filter(e => e.type === 'payment')
+        .reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+
+      // Add totals row
+      tableData.push([
+        '',
+        '',
+        'Total:',
+        formatAmount(totalReceipts),
+        '',
+        '',
+        '',
+        'Total:',
+        formatAmount(totalPayments),
+        '',
+        '',
+      ]);
+
+      autoTable(doc, {
+        head: [[
+          'Sl No',
+          'R.Date',
+          'R.Chq',
+          'R.Amount',
+          'R.Heads',
+          'R.Notes',
+          'P.Date',
+          'P.Chq',
+          'P.Amount',
+          'P.Heads',
+          'P.Notes',
+        ]],
+        body: tableData,
+        startY: 35,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.5,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+          minCellHeight: 8,
+        },
+        headStyles: {
+          fillColor: [100, 100, 100],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 9,
+        },
+        columnStyles: {
+          0: { cellWidth: 12 }, // Sl No
+          1: { cellWidth: 18 }, // R.Date
+          2: { cellWidth: 16 }, // R.Chq
+          3: { cellWidth: 22, halign: 'right' }, // R.Amount
+          4: { cellWidth: 38 }, // R.Heads
+          5: { cellWidth: 32 }, // R.Notes
+          6: { cellWidth: 18 }, // P.Date
+          7: { cellWidth: 16 }, // P.Chq
+          8: { cellWidth: 22, halign: 'right' }, // P.Amount
+          9: { cellWidth: 38 }, // P.Heads
+          10: { cellWidth: 32 }, // P.Notes
+        },
+        didParseCell: (data) => {
+          // Remove all default background colors
+          if (data.section === 'body') {
+            data.cell.styles.fillColor = [255, 255, 255]; // White background
+          }
+
+          // Highlight only the total row (last row)
+          if (data.row.index === tableData.length - 1) {
+            data.cell.styles.fillColor = [229, 231, 235]; // Gray
+            data.cell.styles.fontStyle = 'bold';
+          }
+        },
+      });
+    } else {
+      // CB Report 2 format
+      const tableData: any[] = [];
+      let runningBalance = 0;
+
+      const sortedGroupedData = [...groupedData].sort((a, b) => {
+        const dateA = parseDate(a.date);
+        const dateB = parseDate(b.date);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      sortedGroupedData.forEach((group, groupIndex) => {
+        const dateReceipts = group.receipts.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+        const datePayments = group.payments.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+
+        // By Opening Balance row
+        if (groupIndex > 0) {
+          tableData.push([
+            '',
+            '',
+            'By Opening Bal',
+            formatAmount(runningBalance),
+            '',
+            '',
+            '',
+            '',
+          ]);
+        }
+
+        // Transaction rows
+        const maxRows = Math.max(group.receipts.length, group.payments.length);
+        for (let i = 0; i < maxRows; i++) {
+          const receipt = group.receipts[i];
+          const payment = group.payments[i];
+
+          tableData.push([
+            receipt?.date || '',
+            receipt?.head_of_accounts || '',
+            receipt?.notes || '',
+            receipt ? formatAmount(receipt.amount) : '',
+            payment?.date || '',
+            payment?.head_of_accounts || '',
+            payment?.notes || '',
+            payment ? formatAmount(payment.amount) : '',
+          ]);
+        }
+
+        // Total row
+        const previousBalance = runningBalance;
+        const totalReceipts = dateReceipts + (groupIndex > 0 ? previousBalance : 0);
+        tableData.push([
+          '',
+          '',
+          'Total',
+          formatAmount(totalReceipts),
+          group.date,
+          '',
+          'Total',
+          formatAmount(datePayments),
+        ]);
+
+        runningBalance += dateReceipts - datePayments;
+
+        // Closing balance rows
+        tableData.push([
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          'Closing Bal',
+          formatAmount(runningBalance),
+        ]);
 
         tableData.push([
-          slNo,
-          receipt?.date || '',
-          receipt?.cheque_no || '',
-          receipt ? formatAmount(receipt.amount) : '',
-          receipt?.head_of_accounts || '',
-          receipt?.notes || '',
-          payment?.date || '',
-          payment?.cheque_no || '',
-          payment ? formatAmount(payment.amount) : '',
-          payment?.head_of_accounts || '',
-          payment?.notes || '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          formatAmount(datePayments + runningBalance),
         ]);
-        slNo++;
-      }
-    });
 
-    // Calculate totals
-    const totalReceipts = entries
-      .filter(e => e.type === 'receipt')
-      .reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+        // Empty row
+        tableData.push(['', '', '', '', '', '', '', '']);
+      });
 
-    const totalPayments = entries
-      .filter(e => e.type === 'payment')
-      .reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
-
-    // Add totals row
-    tableData.push([
-      '',
-      '',
-      'Total:',
-      formatAmount(totalReceipts),
-      '',
-      '',
-      '',
-      'Total:',
-      formatAmount(totalPayments),
-      '',
-      '',
-    ]);
-
-    autoTable(doc, {
-      head: [[
-        'Sl No',
-        'R.Date',
-        'R.Chq',
-        'R.Amount',
-        'R.Heads',
-        'R.Notes',
-        'P.Date',
-        'P.Chq',
-        'P.Amount',
-        'P.Heads',
-        'P.Notes',
-      ]],
-      body: tableData,
-      startY: 35,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: {
-        fillColor: [100, 100, 100],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-      },
-      columnStyles: {
-        0: { cellWidth: 12 }, // Sl No
-        1: { cellWidth: 20 }, // R.Date
-        2: { cellWidth: 18 }, // R.Chq
-        3: { cellWidth: 22, halign: 'right' }, // R.Amount
-        4: { cellWidth: 35 }, // R.Heads
-        5: { cellWidth: 30 }, // R.Notes
-        6: { cellWidth: 20 }, // P.Date
-        7: { cellWidth: 18 }, // P.Chq
-        8: { cellWidth: 22, halign: 'right' }, // P.Amount
-        9: { cellWidth: 35 }, // P.Heads
-        10: { cellWidth: 30 }, // P.Notes
-      },
-      didParseCell: (data) => {
-        // Color coding for receipts (columns 0-5)
-        if (data.section === 'body' && data.column.index >= 0 && data.column.index <= 5) {
-          if (data.row.index < tableData.length - 1) { // Not the total row
-            data.cell.styles.fillColor = [220, 252, 231]; // Light green
+      autoTable(doc, {
+        head: [[
+          'R.Date',
+          'R.Heads',
+          'R.Notes',
+          'R.Amount',
+          'P.Date',
+          'P.Heads',
+          'P.Notes',
+          'P.Amount',
+        ]],
+        body: tableData,
+        startY: 35,
+        styles: {
+          fontSize: 8,
+          cellPadding: 2.5,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+          minCellHeight: 8,
+        },
+        headStyles: {
+          fillColor: [100, 100, 100],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 9,
+        },
+        columnStyles: {
+          0: { cellWidth: 20 }, // R.Date
+          1: { cellWidth: 46 }, // R.Heads
+          2: { cellWidth: 46 }, // R.Notes
+          3: { cellWidth: 24, halign: 'right' }, // R.Amount
+          4: { cellWidth: 20 }, // P.Date
+          5: { cellWidth: 46 }, // P.Heads
+          6: { cellWidth: 46 }, // P.Notes
+          7: { cellWidth: 24, halign: 'right' }, // P.Amount
+        },
+        didParseCell: (data) => {
+          // Remove all default background colors
+          if (data.section === 'body') {
+            data.cell.styles.fillColor = [255, 255, 255]; // White background
           }
-        }
-        // Color coding for payments (columns 6-10)
-        if (data.section === 'body' && data.column.index >= 6 && data.column.index <= 10) {
-          if (data.row.index < tableData.length - 1) { // Not the total row
-            data.cell.styles.fillColor = [254, 226, 226]; // Light red
-          }
-        }
-        // Total row styling
-        if (data.row.index === tableData.length - 1) {
-          data.cell.styles.fillColor = [229, 231, 235]; // Gray
-          data.cell.styles.fontStyle = 'bold';
-        }
-      },
-    });
 
-    doc.save(`Cash_Book_Report_${selectedFY}.pdf`);
+          // Check if any cell in this row contains "Total"
+          const rowData = tableData[data.row.index];
+          const isTotalRow = rowData && (rowData[2] === 'Total' || rowData[6] === 'Total');
+
+          // Highlight entire Total row with gray background
+          if (isTotalRow) {
+            data.cell.styles.fillColor = [229, 231, 235]; // Gray
+            data.cell.styles.fontStyle = 'bold';
+          }
+
+          // Check for special cells
+          const cellText = data.cell.text[0];
+
+          // Make "By Opening Bal" bold
+          if (cellText === 'By Opening Bal') {
+            data.cell.styles.fontStyle = 'bold';
+          }
+
+          // Closing Bal styling
+          if (cellText === 'Closing Bal') {
+            data.cell.styles.fontStyle = 'bold';
+          }
+        },
+      });
+    }
+
+    doc.save(`Cash_Book_Report_${selectedReport}_${selectedFY}.pdf`);
   };
 
   if (loading) {
@@ -268,6 +476,7 @@ export default function ReportsPage({ selectedFY }: ReportsPageProps) {
               className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
             >
               <option value="cb-report-1">CB Report 1 - Cash Book Format</option>
+              <option value="cb-report-2">CB Report 2 - Traditional Cash Book</option>
             </select>
           </div>
 
@@ -305,7 +514,7 @@ export default function ReportsPage({ selectedFY }: ReportsPageProps) {
                 <p className="text-sm mt-1">Add some transactions to generate reports</p>
               </div>
             </div>
-          ) : (
+          ) : selectedReport === 'cb-report-1' ? (
             <table className="w-full border-collapse">
               <thead className="bg-gray-200 sticky top-0 z-10">
                 <tr>
@@ -414,6 +623,218 @@ export default function ReportsPage({ selectedFY }: ReportsPageProps) {
 
                     return rows;
                   });
+                })()}
+              </tbody>
+            </table>
+          ) : (
+            /* CB Report 2 - Traditional Cash Book Format */
+            <table className="w-full border-collapse">
+              <thead className="bg-gray-200 sticky top-0 z-10">
+                <tr>
+                  {/* Receipt Columns */}
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Date
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Heads
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Notes
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                    R.Amount
+                  </th>
+                  {/* Payment Columns */}
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Date
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Heads
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Notes
+                  </th>
+                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                    P.Amount
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const rows: React.ReactElement[] = [];
+                  let runningBalance = 0;
+
+                  // Sort grouped data by date (oldest first for cashbook)
+                  const sortedGroupedData = [...groupedData].sort((a, b) => {
+                    const dateA = parseDate(a.date);
+                    const dateB = parseDate(b.date);
+                    return dateA.getTime() - dateB.getTime();
+                  });
+
+                  sortedGroupedData.forEach((group, groupIndex) => {
+                    const dateReceipts = group.receipts.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+                    const datePayments = group.payments.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
+
+                    // First date: Show opening balance
+                    if (groupIndex === 0 && runningBalance !== 0) {
+                      rows.push(
+                        <tr key="opening-balance" className="bg-white">
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                            {group.date}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                            AA Opening Balance
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50">
+                            Opening Balance as on date
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-blue-600 text-right font-medium border border-gray-300 bg-green-50">
+                            {formatAmount(runningBalance)}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                            {group.date}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                        </tr>
+                      );
+                    }
+
+                    // Show "By Opening Bal" row if this is not the first date
+                    if (groupIndex > 0) {
+                      rows.push(
+                        <tr key={`by-opening-${groupIndex}`} className="bg-white">
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-blue-600 font-medium border border-gray-300 bg-green-50">
+                            By Opening Bal
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-blue-600 text-right font-medium border border-gray-300 bg-green-50">
+                            {formatAmount(runningBalance)}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                        </tr>
+                      );
+                    }
+
+                    // Transaction rows
+                    const maxRows = Math.max(group.receipts.length, group.payments.length);
+                    for (let i = 0; i < maxRows; i++) {
+                      const receipt = group.receipts[i];
+                      const payment = group.payments[i];
+
+                      rows.push(
+                        <tr key={`${groupIndex}-${i}`} className="hover:bg-gray-50">
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                            {receipt?.date || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                            {receipt?.head_of_accounts || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50">
+                            {receipt?.notes || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50">
+                            {receipt ? formatAmount(receipt.amount) : ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                            {payment?.date || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                            {payment?.head_of_accounts || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50">
+                            {payment?.notes || ''}
+                          </td>
+                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50">
+                            {payment ? formatAmount(payment.amount) : ''}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    // Calculate total including opening balance for receipts
+                    const previousBalance = runningBalance;
+                    const totalReceipts = dateReceipts + (groupIndex > 0 ? previousBalance : 0);
+
+                    // Total row (shaded)
+                    runningBalance += dateReceipts - datePayments;
+                    rows.push(
+                      <tr key={`total-${groupIndex}`} className="bg-gray-200">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
+                          Total
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
+                          {formatAmount(totalReceipts)}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300">
+                          {group.date}
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
+                          Total
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
+                          {formatAmount(datePayments)}
+                        </td>
+                      </tr>
+                    );
+
+                    // Closing balance rows
+                    rows.push(
+                      <tr key={`closing-1-${groupIndex}`} className="bg-white">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 font-medium border border-gray-300 bg-red-50">
+                          Closing Bal
+                        </td>
+                        <td className="px-3 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
+                          {formatAmount(runningBalance)}
+                        </td>
+                      </tr>
+                    );
+
+                    rows.push(
+                      <tr key={`closing-2-${groupIndex}`} className="bg-white">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
+                          {formatAmount(datePayments + runningBalance)}
+                        </td>
+                      </tr>
+                    );
+
+                    // Empty row for spacing
+                    rows.push(
+                      <tr key={`space-${groupIndex}`} className="bg-white">
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                      </tr>
+                    );
+                  });
+
+                  return rows;
                 })()}
               </tbody>
             </table>

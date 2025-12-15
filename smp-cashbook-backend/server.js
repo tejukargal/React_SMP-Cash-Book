@@ -77,21 +77,33 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'SMP Cash Book API is running' });
 });
 
-// Get all entries sorted by date (newest first), optionally filtered by FY
+// Get all entries sorted by date (newest first), optionally filtered by FY and CB Type
 app.get('/api/entries', async (req, res) => {
   try {
-    const { fy } = req.query;
+    const { fy, cb_type } = req.query;
 
     let query = `
       SELECT * FROM cash_entries
     `;
 
     const params = [];
+    const conditions = [];
 
     // Add FY filter if provided
     if (fy) {
-      query += ` WHERE financial_year = $1`;
+      conditions.push(`financial_year = $${params.length + 1}`);
       params.push(fy);
+    }
+
+    // Add CB Type filter if provided (and not 'both')
+    if (cb_type && cb_type !== 'both') {
+      conditions.push(`cb_type = $${params.length + 1}`);
+      params.push(cb_type);
+    }
+
+    // Add WHERE clause if there are conditions
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
     }
 
     query += `
@@ -200,7 +212,7 @@ app.get('/api/suggestions/notes', async (req, res) => {
 // Create new entry
 app.post('/api/entries', async (req, res) => {
   try {
-    const { date, type, cheque_no, amount, head_of_accounts, notes } = req.body;
+    const { date, type, cheque_no, amount, head_of_accounts, notes, cb_type } = req.body;
 
     // Validation - ALL fields are now mandatory
     if (!date || !type || !amount || !head_of_accounts || !cheque_no || !notes) {
@@ -211,17 +223,20 @@ app.post('/api/entries', async (req, res) => {
       return res.status(400).json({ error: 'Invalid type. Must be "receipt" or "payment"' });
     }
 
+    // Default cb_type to 'aided' if not provided
+    const cbType = cb_type || 'aided';
+
     // Calculate financial year
     const financial_year = calculateFinancialYear(date);
 
     const result = await pool.query(
-      `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year, cb_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year]
+      [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year, cbType]
     );
 
-    console.log(`✅ Created ${type}: ${head_of_accounts} - ${amount}`);
+    console.log(`✅ Created ${type} (${cbType}): ${head_of_accounts} - ${amount}`);
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Error creating entry:', error);
@@ -253,17 +268,20 @@ app.get('/api/entries/:id', async (req, res) => {
 app.put('/api/entries/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { date, cheque_no, amount, head_of_accounts, notes } = req.body;
+    const { date, cheque_no, amount, head_of_accounts, notes, cb_type } = req.body;
 
     // Recalculate financial year if date changed
     const financial_year = calculateFinancialYear(date);
 
+    // Default cb_type to 'aided' if not provided
+    const cbType = cb_type || 'aided';
+
     const result = await pool.query(
       `UPDATE cash_entries
-       SET date = $1, cheque_no = $2, amount = $3, head_of_accounts = $4, notes = $5, financial_year = $6, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $7
+       SET date = $1, cheque_no = $2, amount = $3, head_of_accounts = $4, notes = $5, financial_year = $6, cb_type = $7, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $8
        RETURNING *`,
-      [date, cheque_no || null, parseFloat(amount), head_of_accounts, notes || null, financial_year, id]
+      [date, cheque_no || null, parseFloat(amount), head_of_accounts, notes || null, financial_year, cbType, id]
     );
 
     if (result.rows.length === 0) {
@@ -279,20 +297,34 @@ app.put('/api/entries/:id', async (req, res) => {
 });
 
 // Delete all entries (MUST come before delete by ID route)
+// Supports optional cb_type query parameter to filter deletions
 app.delete('/api/entries/delete-all', async (req, res) => {
   try {
-    const result = await pool.query('DELETE FROM cash_entries');
+    const { cb_type } = req.query;
+
+    let query = 'DELETE FROM cash_entries';
+    const params = [];
+
+    // Add WHERE clause if cb_type is specified
+    if (cb_type && (cb_type === 'aided' || cb_type === 'unaided')) {
+      query += ' WHERE cb_type = $1';
+      params.push(cb_type);
+    }
+
+    const result = await pool.query(query, params);
     const deletedCount = result.rowCount || 0;
 
-    console.log(`✅ Deleted all entries: ${deletedCount} records removed`);
+    const cbTypeLabel = cb_type === 'aided' ? 'Aided' : cb_type === 'unaided' ? 'Unaided' : 'all';
+    console.log(`✅ Deleted ${cbTypeLabel} entries: ${deletedCount} records removed`);
+
     res.json({
       success: true,
       deleted: deletedCount,
-      message: `Successfully deleted ${deletedCount} entries`
+      message: `Successfully deleted ${deletedCount} ${cbTypeLabel} entries`
     });
   } catch (error) {
-    console.error('Error deleting all entries:', error);
-    res.status(500).json({ error: 'Failed to delete all entries', details: error.message });
+    console.error('Error deleting entries:', error);
+    res.status(500).json({ error: 'Failed to delete entries', details: error.message });
   }
 });
 
@@ -357,7 +389,7 @@ app.post('/api/entries/bulk-import', async (req, res) => {
       await client.query('BEGIN');
 
       for (let i = 0; i < entries.length; i++) {
-        const { date, type, cheque_no, amount, head_of_accounts, notes } = entries[i];
+        const { date, type, cheque_no, amount, head_of_accounts, notes, cb_type } = entries[i];
 
         try {
           // Validation
@@ -379,14 +411,17 @@ app.post('/api/entries/bulk-import', async (req, res) => {
             continue;
           }
 
+          // Default cb_type to 'aided' if not provided
+          const cbType = cb_type || 'aided';
+
           // Calculate financial year
           const financial_year = calculateFinancialYear(date);
 
           const result = await client.query(
-            `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year, cb_type)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              RETURNING *`,
-            [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year]
+            [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year, cbType]
           );
 
           results.push(result.rows[0]);

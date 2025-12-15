@@ -1,12 +1,14 @@
-import type { AppPage } from '../types';
+import type { AppPage, CBType } from '../types';
 
 interface SidebarProps {
   currentPage: AppPage;
   onNavigate: (page: AppPage) => void;
+  selectedCBType: CBType;
 }
 
-export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
+export default function Sidebar({ currentPage, onNavigate, selectedCBType }: SidebarProps) {
   const menuItems = [
+    { id: 'dashboard' as AppPage, label: 'Dashboard', icon: '🏠' },
     { id: 'entry' as AppPage, label: 'New Entry', icon: '➕' },
     { id: 'transactions' as AppPage, label: 'All Transactions', icon: '📊' },
     { id: 'ledgers' as AppPage, label: 'Ledgers', icon: '📖' },
@@ -22,6 +24,18 @@ export default function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       <div className="p-3 border-b border-blue-600">
         <h2 className="text-sm font-bold">SMP Cash Book</h2>
         <p className="text-[10px] text-blue-200 mt-0.5">Sanjay Memorial Polytechnic</p>
+      </div>
+
+      {/* CB Type Indicator */}
+      <div className="px-3 py-2 bg-blue-800 border-b border-blue-600">
+        <p className="text-[10px] text-blue-200 mb-1">Cashbook Type:</p>
+        <div className="flex items-center gap-1">
+          <span className="text-xs font-semibold">
+            {selectedCBType === 'aided' && '🟢 Aided'}
+            {selectedCBType === 'unaided' && '🟡 Unaided'}
+            {selectedCBType === 'both' && '🔵 Both (Combined)'}
+          </span>
+        </div>
       </div>
 
       {/* Navigation Menu */}

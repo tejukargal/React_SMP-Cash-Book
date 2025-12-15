@@ -139,7 +139,7 @@ exports.handler = async (event, context) => {
         await client.query('BEGIN');
 
         for (let i = 0; i < entries.length; i++) {
-          const { date, type, cheque_no, amount, head_of_accounts, notes } = entries[i];
+          const { date, type, cheque_no, amount, head_of_accounts, notes, cb_type } = entries[i];
 
           try {
             if (!date || !type || !amount || !head_of_accounts || !cheque_no || !notes) {
@@ -152,13 +152,14 @@ exports.handler = async (event, context) => {
               continue;
             }
 
+            const cbType = cb_type || 'aided';
             const financial_year = calculateFinancialYear(date);
 
             const result = await client.query(
-              `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+              `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year, cb_type)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING *`,
-              [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year]
+              [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year, cbType]
             );
 
             results.push(result.rows[0]);
@@ -185,26 +186,51 @@ exports.handler = async (event, context) => {
     }
 
     // ===== DELETE ALL ENTRIES (must come before DELETE by ID) =====
+    // Supports optional cb_type query parameter to filter deletions
     if (method === 'DELETE' && route === 'entries/delete-all') {
-      const result = await pool.query('DELETE FROM cash_entries');
+      const { cb_type } = queryParams;
+
+      let query = 'DELETE FROM cash_entries';
+      const params = [];
+
+      // Add WHERE clause if cb_type is specified
+      if (cb_type && (cb_type === 'aided' || cb_type === 'unaided')) {
+        query += ' WHERE cb_type = $1';
+        params.push(cb_type);
+      }
+
+      const result = await pool.query(query, params);
       const deletedCount = result.rowCount || 0;
+
+      const cbTypeLabel = cb_type === 'aided' ? 'Aided' : cb_type === 'unaided' ? 'Unaided' : 'all';
+      console.log(`✅ Deleted ${cbTypeLabel} entries: ${deletedCount} records removed`);
 
       return sendResponse(200, {
         success: true,
         deleted: deletedCount,
-        message: `Successfully deleted ${deletedCount} entries`
+        message: `Successfully deleted ${deletedCount} ${cbTypeLabel} entries`
       });
     }
 
     // ===== GET ALL ENTRIES =====
     if (method === 'GET' && route === 'entries') {
-      const { fy } = queryParams;
+      const { fy, cb_type } = queryParams;
       let query = `SELECT * FROM cash_entries`;
       const params = [];
+      const conditions = [];
 
       if (fy) {
-        query += ` WHERE financial_year = $1`;
+        conditions.push(`financial_year = $${params.length + 1}`);
         params.push(fy);
+      }
+
+      if (cb_type && cb_type !== 'both') {
+        conditions.push(`cb_type = $${params.length + 1}`);
+        params.push(cb_type);
+      }
+
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
       }
 
       query += `
@@ -272,7 +298,7 @@ exports.handler = async (event, context) => {
 
     // ===== CREATE NEW ENTRY =====
     if (method === 'POST' && route === 'entries') {
-      const { date, type, cheque_no, amount, head_of_accounts, notes } = body;
+      const { date, type, cheque_no, amount, head_of_accounts, notes, cb_type } = body;
 
       if (!date || !type || !amount || !head_of_accounts || !cheque_no || !notes) {
         return sendResponse(400, { error: 'All fields are required' });
@@ -282,13 +308,14 @@ exports.handler = async (event, context) => {
         return sendResponse(400, { error: 'Invalid type. Must be "receipt" or "payment"' });
       }
 
+      const cbType = cb_type || 'aided';
       const financial_year = calculateFinancialYear(date);
 
       const result = await pool.query(
-        `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO cash_entries (date, type, cheque_no, amount, head_of_accounts, notes, financial_year, cb_type)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
-        [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year]
+        [date, type, cheque_no, parseFloat(amount), head_of_accounts, notes, financial_year, cbType]
       );
 
       return sendResponse(201, result.rows[0]);
@@ -308,16 +335,17 @@ exports.handler = async (event, context) => {
     // ===== UPDATE ENTRY =====
     if (method === 'PUT' && route.match(/^entries\/[^/]+$/)) {
       const id = route.split('/')[1];
-      const { date, cheque_no, amount, head_of_accounts, notes } = body;
+      const { date, cheque_no, amount, head_of_accounts, notes, cb_type } = body;
 
       const financial_year = calculateFinancialYear(date);
+      const cbType = cb_type || 'aided';
 
       const result = await pool.query(
         `UPDATE cash_entries
-         SET date = $1, cheque_no = $2, amount = $3, head_of_accounts = $4, notes = $5, financial_year = $6, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $7
+         SET date = $1, cheque_no = $2, amount = $3, head_of_accounts = $4, notes = $5, financial_year = $6, cb_type = $7, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $8
          RETURNING *`,
-        [date, cheque_no || null, parseFloat(amount), head_of_accounts, notes || null, financial_year, id]
+        [date, cheque_no || null, parseFloat(amount), head_of_accounts, notes || null, financial_year, cbType, id]
       );
 
       if (result.rows.length === 0) {

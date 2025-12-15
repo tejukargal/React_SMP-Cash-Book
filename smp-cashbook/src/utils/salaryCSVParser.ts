@@ -33,7 +33,7 @@ export interface SalaryParseResult {
   summary: MonthlySummary[];
 }
 
-export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
+export function parseSalaryCSVWithSummary(csvText: string, cbType: 'aided' | 'unaided' = 'aided'): SalaryParseResult {
   // Split CSV into lines while respecting quoted fields that may contain newlines
   const lines = splitCSVIntoLines(csvText.trim());
 
@@ -146,7 +146,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalGrossSalary,
         'Govt Salary Grants',
         `Received Staff Salary Grants For The Month Of ${month} ${year}`,
-        'Grant'
+        'Grant',
+        cbType
       ));
     }
 
@@ -159,7 +160,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalITDeduction,
         'I Tax',
         `Staff I Tax Deduction For The Month Of ${month} ${year}`,
-        'Deduction'
+        'Deduction',
+        cbType
       ));
     }
 
@@ -171,7 +173,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalPTDeduction,
         'P Tax',
         `Staff P Tax Deduction For The Month Of ${month} ${year}`,
-        'Deduction'
+        'Deduction',
+        cbType
       ));
     }
 
@@ -183,7 +186,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalLICDeduction,
         'Lic',
         `Staff Lic Deduction For The Month Of ${month} ${year}`,
-        'Deduction'
+        'Deduction',
+        cbType
       ));
     }
 
@@ -195,7 +199,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalGSLICDeduction,
         'Gslic',
         `Staff Gslic Deduction For The Month Of ${month} ${year}`,
-        'Deduction'
+        'Deduction',
+        cbType
       ));
     }
 
@@ -207,7 +212,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalFBFDeduction,
         'Fbf',
         `Staff Fbf Deduction For The Month Of ${month} ${year}`,
-        'Deduction'
+        'Deduction',
+        cbType
       ));
     }
 
@@ -222,7 +228,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalGrossSalary,
         'Govt Salary Account',
         `Disbursed Staff Salary For The Month Of ${month} ${year}`,
-        'Salary'
+        'Salary',
+        cbType
       ));
     }
 
@@ -234,7 +241,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
         aggregate.totalDeductions,
         'Receivable Account',
         `Staff Salary Deductions Receivable For The Month Of ${month} ${year}`,
-        'Deduction'
+        'Deduction',
+        cbType
       ));
     }
   });
@@ -243,8 +251,8 @@ export function parseSalaryCSVWithSummary(csvText: string): SalaryParseResult {
 }
 
 // Backward compatibility wrapper
-export function convertSalaryCSVToEntries(csvText: string): CashEntry[] {
-  const result = parseSalaryCSVWithSummary(csvText);
+export function convertSalaryCSVToEntries(csvText: string, cbType: 'aided' | 'unaided' = 'aided'): CashEntry[] {
+  const result = parseSalaryCSVWithSummary(csvText, cbType);
   return result.entries;
 }
 
@@ -254,7 +262,8 @@ function createEntry(
   amount: number,
   headOfAccounts: string,
   notes: string,
-  chequeNo: string
+  chequeNo: string,
+  cbType: 'aided' | 'unaided'
 ): CashEntry {
   const now = new Date().toISOString();
   return {
@@ -265,6 +274,7 @@ function createEntry(
     amount,
     head_of_accounts: headOfAccounts,
     notes,
+    cb_type: cbType,
     created_at: now,
     updated_at: now,
   };

@@ -14,12 +14,17 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 // Database Service - Connected to Nile via Backend API
 export const db = {
-  // Get all entries sorted by date (newest first), optionally filtered by FY
-  async getAllEntries(financialYear?: string): Promise<CashEntry[]> {
+  // Get all entries sorted by date (newest first), optionally filtered by FY and CB Type
+  async getAllEntries(financialYear?: string, cbType?: 'aided' | 'unaided' | 'both'): Promise<CashEntry[]> {
     try {
-      const url = financialYear
-        ? `${API_BASE_URL}/entries?fy=${encodeURIComponent(financialYear)}`
+      const params = new URLSearchParams();
+      if (financialYear) params.append('fy', financialYear);
+      if (cbType && cbType !== 'both') params.append('cb_type', cbType);
+
+      const url = params.toString()
+        ? `${API_BASE_URL}/entries?${params.toString()}`
         : `${API_BASE_URL}/entries`;
+
       const response = await fetch(url);
       const entries = await handleResponse<CashEntry[]>(response);
       return entries;
@@ -92,22 +97,33 @@ export const db = {
   // Create new entry
   async createEntry(type: EntryType, formData: EntryFormData): Promise<CashEntry> {
     try {
+      // Ensure cb_type is valid (only 'aided' or 'unaided')
+      const validCBType = formData.cb_type === 'unaided' ? 'unaided' : 'aided';
+
+      const payload = {
+        date: formData.date,
+        type,
+        cheque_no: formData.cheque_no || null,
+        amount: parseFloat(formData.amount),
+        head_of_accounts: formData.head_of_accounts,
+        notes: formData.notes || null,
+        cb_type: validCBType,
+      };
+
+      console.log('🔍 Database Service - Creating entry with payload:', payload);
+      console.log('🔍 Database Service - Original formData.cb_type:', formData.cb_type);
+      console.log('🔍 Database Service - Validated cb_type:', validCBType);
+
       const response = await fetch(`${API_BASE_URL}/entries`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          date: formData.date,
-          type,
-          cheque_no: formData.cheque_no || null,
-          amount: parseFloat(formData.amount),
-          head_of_accounts: formData.head_of_accounts,
-          notes: formData.notes || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const entry = await handleResponse<CashEntry>(response);
+      console.log('🔍 Database Service - Entry created:', entry);
       return entry;
     } catch (error) {
       console.error('Failed to create entry:', error);
@@ -131,6 +147,9 @@ export const db = {
   // Update entry
   async updateEntry(id: string, formData: EntryFormData): Promise<CashEntry | null> {
     try {
+      // Ensure cb_type is valid (only 'aided' or 'unaided')
+      const validCBType = formData.cb_type === 'unaided' ? 'unaided' : 'aided';
+
       const response = await fetch(`${API_BASE_URL}/entries/${id}`, {
         method: 'PUT',
         headers: {
@@ -142,6 +161,7 @@ export const db = {
           amount: parseFloat(formData.amount),
           head_of_accounts: formData.head_of_accounts,
           notes: formData.notes || null,
+          cb_type: validCBType,
         }),
       });
 
@@ -211,6 +231,7 @@ export const db = {
     amount: number;
     head_of_accounts: string;
     notes: string;
+    cb_type?: 'aided' | 'unaided';
   }>): Promise<{
     success: boolean;
     imported: number;
@@ -239,14 +260,26 @@ export const db = {
     }
   },
 
-  // Delete all entries
-  async deleteAllEntries(): Promise<{ success: boolean; deleted: number }> {
+  // Delete all entries (optionally filtered by CB Type)
+  async deleteAllEntries(cbType?: 'aided' | 'unaided' | 'both'): Promise<{ success: boolean; deleted: number }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/entries/delete-all`, {
+      const params = new URLSearchParams();
+      if (cbType && cbType !== 'both') {
+        params.append('cb_type', cbType);
+      }
+
+      const url = params.toString()
+        ? `${API_BASE_URL}/entries/delete-all?${params.toString()}`
+        : `${API_BASE_URL}/entries/delete-all`;
+
+      console.log('🔍 Database Service - Deleting entries with cb_type filter:', cbType || 'all');
+
+      const response = await fetch(url, {
         method: 'DELETE',
       });
 
       const data = await handleResponse<{ success: boolean; deleted: number }>(response);
+      console.log('🔍 Database Service - Deleted entries count:', data.deleted);
       return data;
     } catch (error) {
       console.error('Failed to delete all entries:', error);

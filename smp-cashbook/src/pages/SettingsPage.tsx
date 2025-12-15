@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
 import { getCurrentFinancialYear, generateFinancialYears, getFinancialYearDisplay } from '../utils/financialYear';
 import { db } from '../services/database';
+import type { CBType } from '../types';
 
 interface SettingsPageProps {
   onFinancialYearChange?: (fy: string) => void;
+  onCBTypeChange?: (cbType: CBType) => void;
+  selectedCBType: CBType;
 }
 
-export default function SettingsPage({ onFinancialYearChange }: SettingsPageProps) {
+export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, selectedCBType }: SettingsPageProps) {
   const [selectedFY, setSelectedFY] = useState<string>(() => {
     // Load from localStorage or use current FY
     return localStorage.getItem('selectedFinancialYear') || getCurrentFinancialYear();
   });
+
+  const [localCBType, setLocalCBType] = useState<CBType>(selectedCBType);
 
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
@@ -26,10 +31,24 @@ export default function SettingsPage({ onFinancialYearChange }: SettingsPageProp
     }
   }, [selectedFY, onFinancialYearChange]);
 
+  useEffect(() => {
+    // Sync local CB Type with prop changes
+    setLocalCBType(selectedCBType);
+  }, [selectedCBType]);
+
   const handleFYChange = (fy: string) => {
     setSelectedFY(fy);
     localStorage.setItem('selectedFinancialYear', fy);
     showSuccessMessage(`Financial Year changed to ${getFinancialYearDisplay(fy)}`);
+  };
+
+  const handleCBTypeChange = (cbType: CBType) => {
+    setLocalCBType(cbType);
+    if (onCBTypeChange) {
+      onCBTypeChange(cbType);
+    }
+    const cbTypeLabel = cbType === 'aided' ? 'Aided' : cbType === 'unaided' ? 'Unaided' : 'Both (Combined)';
+    showSuccessMessage(`Cashbook Type changed to ${cbTypeLabel}`);
   };
 
   const showSuccessMessage = (message: string) => {
@@ -47,10 +66,12 @@ export default function SettingsPage({ onFinancialYearChange }: SettingsPageProp
     setDeleteError('');
 
     try {
-      await db.deleteAllEntries();
+      const result = await db.deleteAllEntries(localCBType);
       setShowDeleteConfirm(false);
       setDeletePassword('');
-      showSuccessMessage('All data has been deleted successfully');
+
+      const cbTypeLabel = localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All (Both Aided & Unaided)';
+      showSuccessMessage(`${cbTypeLabel} data has been deleted successfully (${result.deleted} entries)`);
     } catch (error) {
       console.error('Failed to delete data:', error);
       setDeleteError('Failed to delete data. Please try again.');
@@ -118,6 +139,65 @@ export default function SettingsPage({ onFinancialYearChange }: SettingsPageProp
           </div>
         </div>
 
+        {/* CB Type Section */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-700 mb-3">Cashbook Type</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Select the cashbook type to manage transactions. You can view Aided, Unaided, or both combined.
+          </p>
+
+          <div className="grid grid-cols-1 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Current Cashbook Type:
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => handleCBTypeChange('aided')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    localCBType === 'aided'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🟢 Aided
+                </button>
+                <button
+                  onClick={() => handleCBTypeChange('unaided')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    localCBType === 'unaided'
+                      ? 'bg-yellow-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🟡 Unaided
+                </button>
+                <button
+                  onClick={() => handleCBTypeChange('both')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    localCBType === 'both'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  🔵 Both (Combined)
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-800">
+                <strong>Selected CB Type:</strong> {localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'Both (Combined)'}
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                {localCBType === 'aided' && 'Showing only Aided cashbook transactions'}
+                {localCBType === 'unaided' && 'Showing only Unaided cashbook transactions'}
+                {localCBType === 'both' && 'Showing both Aided and Unaided transactions combined'}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Database Info Section */}
         <div className="mt-8 pt-6 border-t border-gray-200">
           <h3 className="text-lg font-semibold text-gray-700 mb-3">Database Information</h3>
@@ -160,22 +240,39 @@ export default function SettingsPage({ onFinancialYearChange }: SettingsPageProp
         <div className="mt-6 pt-6 border-t border-red-200">
           <h3 className="text-lg font-semibold text-red-700 mb-3">Danger Zone</h3>
           <div className="bg-red-50 border border-red-200 p-4 rounded-md">
-            <p className="text-sm text-red-800 mb-4">
-              <strong>Warning:</strong> This action will permanently delete all cash entries from the database. This cannot be undone!
-            </p>
+            {localCBType === 'aided' && (
+              <p className="text-sm text-red-800 mb-4">
+                <strong>Warning:</strong> This action will permanently delete all <strong>Aided</strong> cashbook entries from the database. This cannot be undone!
+              </p>
+            )}
+            {localCBType === 'unaided' && (
+              <p className="text-sm text-red-800 mb-4">
+                <strong>Warning:</strong> This action will permanently delete all <strong>Unaided</strong> cashbook entries from the database. This cannot be undone!
+              </p>
+            )}
+            {localCBType === 'both' && (
+              <p className="text-sm text-red-800 mb-4">
+                <strong>Warning:</strong> This action will permanently delete <strong>ALL</strong> cashbook entries (both Aided and Unaided) from the database. This cannot be undone!
+              </p>
+            )}
 
             {!showDeleteConfirm ? (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors"
               >
-                Reset All Data
+                {localCBType === 'aided' && 'Reset Aided Data'}
+                {localCBType === 'unaided' && 'Reset Unaided Data'}
+                {localCBType === 'both' && 'Reset All Data'}
               </button>
             ) : (
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-red-900 mb-2">
-                    Enter password to confirm deletion:
+                    Enter password to confirm deletion of{' '}
+                    {localCBType === 'aided' && 'Aided'}
+                    {localCBType === 'unaided' && 'Unaided'}
+                    {localCBType === 'both' && 'All'} data:
                   </label>
                   <input
                     type="password"
@@ -195,7 +292,7 @@ export default function SettingsPage({ onFinancialYearChange }: SettingsPageProp
                     disabled={isDeleting || !deletePassword}
                     className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
-                    {isDeleting ? 'Deleting...' : 'Confirm Delete All Data'}
+                    {isDeleting ? 'Deleting...' : `Confirm Delete ${localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All'} Data`}
                   </button>
                   <button
                     onClick={handleCancelDelete}

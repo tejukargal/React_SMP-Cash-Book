@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import EntryForm from '../components/EntryForm';
-import type { CashEntry, EntryType, EntryFormData } from '../types';
+import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
 import { formatAmount, calculateRunningBalance, getTodayDate } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 
 interface LedgersPageProps {
   selectedFY: string;
+  selectedCBType: CBType;
 }
 
 interface LedgerSummary {
@@ -18,7 +19,7 @@ interface LedgerSummary {
   count: number;
 }
 
-export default function LedgersPage({ selectedFY }: LedgersPageProps) {
+export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageProps) {
   const [entries, setEntries] = useState<CashEntry[]>([]);
   const [ledgers, setLedgers] = useState<LedgerSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -31,10 +32,10 @@ export default function LedgersPage({ selectedFY }: LedgersPageProps) {
   // Load all entries and compute ledgers
   useEffect(() => {
     loadEntries();
-  }, [selectedFY]);
+  }, [selectedFY, selectedCBType]);
 
   const loadEntries = async () => {
-    const allEntries = await db.getAllEntries(selectedFY);
+    const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
     setEntries(allEntries);
     computeLedgers(allEntries);
   };
@@ -129,6 +130,7 @@ export default function LedgersPage({ selectedFY }: LedgersPageProps) {
       amount: entry.amount.toString(),
       head_of_accounts: entry.head_of_accounts,
       notes: entry.notes || '',
+      cb_type: entry.cb_type,
     };
 
     setEditData({ id: entry.id, type: entry.type, formData });
@@ -143,7 +145,7 @@ export default function LedgersPage({ selectedFY }: LedgersPageProps) {
       }
 
       // Reload all entries and recompute ledgers
-      const allEntries = await db.getAllEntries(selectedFY);
+      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
       setEntries(allEntries);
       computeLedgers(allEntries);
       handleCancel();
@@ -912,6 +914,7 @@ export default function LedgersPage({ selectedFY }: LedgersPageProps) {
           <EntryForm
             selectedType={editData.type}
             initialDate={getTodayDate()}
+            selectedCBType={selectedCBType}
             editData={{ id: editData.id, formData: editData.formData }}
             onSave={handleSave}
             onCancel={handleCancel}

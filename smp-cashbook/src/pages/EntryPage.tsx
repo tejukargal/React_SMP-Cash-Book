@@ -1,35 +1,34 @@
 import { useState, useEffect } from 'react';
-import TypeSelection from '../components/TypeSelection';
 import EntryForm from '../components/EntryForm';
-import type { CashEntry, EntryType, EntryFormData, AppStep } from '../types';
-import { getTodayDate, formatAmount, calculateClosingBalance } from '../utils/helpers';
+import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
+import { getTodayDate, formatAmount, calculateClosingBalance, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 
 interface EntryPageProps {
   selectedFY: string;
+  selectedCBType: CBType;
   onNavigate?: (page: 'transactions') => void;
 }
 
-export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
-  const [currentStep, setCurrentStep] = useState<AppStep>('select-type');
-  const [selectedType, setSelectedType] = useState<EntryType | null>(null);
+export default function EntryPage({ selectedFY, selectedCBType, onNavigate }: EntryPageProps) {
   const [recentEntries, setRecentEntries] = useState<CashEntry[]>([]);
   const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
-  const [editData, setEditData] = useState<{ id: string; formData: EntryFormData } | null>(null);
+  const [editData, setEditData] = useState<{ id: string; formData: EntryFormData; type: EntryType } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [formResetTrigger, setFormResetTrigger] = useState<number>(0);
 
-  // Load recent entries on mount and when FY changes
+  // Load recent entries on mount and when FY or CB Type changes
   useEffect(() => {
     loadRecentEntries();
     loadMostRecentDate();
-  }, [selectedFY]);
+  }, [selectedFY, selectedCBType]);
 
   const loadRecentEntries = async () => {
     try {
-      // Always fetch fresh data without FY filter for new entries page
-      const allEntries = await db.getAllEntries(selectedFY);
+      // Fetch entries filtered by FY and CB Type
+      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
 
       // Sort entries oldest to newest
       const sortedEntries = allEntries.sort((a, b) => {
@@ -55,12 +54,6 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
     }
   };
 
-  const handleSelectType = (type: EntryType) => {
-    setSelectedType(type);
-    setEditData(null);
-    setCurrentStep('fill-form');
-  };
-
   const handleSave = async (type: EntryType, formData: EntryFormData, editId?: string) => {
     try {
       if (editId) {
@@ -68,9 +61,9 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         await db.updateEntry(editId, formData);
         showSuccessMessage('Entry updated successfully!');
 
-        // Reload entries and reset form
+        // Reload entries and reset edit mode
         await loadRecentEntries();
-        handleCancel();
+        setEditData(null);
       } else {
         // Check for duplicates before creating new entry
         const allEntries = await db.getAllEntries();
@@ -113,11 +106,11 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         // Clear search query to show all entries
         setSearchQuery('');
 
-        // Reset form
-        handleCancel();
-
         // Reload entries immediately
         await loadRecentEntries();
+
+        // Trigger form reset (clear all fields except date)
+        setFormResetTrigger(prev => prev + 1);
 
         // Show success message after reload completes
         showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`);
@@ -128,12 +121,6 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
     }
   };
 
-  const handleCancel = () => {
-    setCurrentStep('select-type');
-    setSelectedType(null);
-    setEditData(null);
-  };
-
   const handleEdit = (entry: CashEntry) => {
     const formData: EntryFormData = {
       date: entry.date,
@@ -141,14 +128,17 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
       amount: entry.amount.toString(),
       head_of_accounts: entry.head_of_accounts,
       notes: entry.notes || '',
+      cb_type: entry.cb_type,
     };
 
-    setEditData({ id: entry.id, formData });
-    setSelectedType(entry.type);
-    setCurrentStep('fill-form');
+    setEditData({ id: entry.id, formData, type: entry.type });
 
     // Scroll to top to show form
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCancelEdit = () => {
+    setEditData(null);
   };
 
   const handleDelete = async (id: string, head: string) => {
@@ -181,8 +171,8 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
       );
     });
 
-  // For display, show only the last 20 entries (most recent)
-  const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(-20);
+  // For display, show only the last 5 entries (most recent) in reverse order (newest to oldest)
+  const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(-5).reverse();
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -193,28 +183,42 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
         </div>
       )}
 
-      {/* Entry Form Section */}
-      <div className="bg-white shadow-sm m-2 rounded-lg">
-        {currentStep === 'select-type' ? (
-          <TypeSelection onSelectType={handleSelectType} />
-        ) : selectedType ? (
-          <div className="px-3 py-2">
-            <EntryForm
-              selectedType={selectedType}
-              initialDate={defaultDate}
-              editData={editData}
-              onSave={handleSave}
-              onCancel={handleCancel}
-            />
-          </div>
-        ) : null}
+      {/* Entry Forms Section - Receipt and Payment Side by Side */}
+      <div className="grid grid-cols-2 gap-2 m-2">
+        {/* Receipt Form */}
+        <div className="bg-white shadow-sm rounded-lg px-3 py-2">
+          <EntryForm
+            selectedType="receipt"
+            initialDate={defaultDate}
+            selectedCBType={selectedCBType}
+            editData={editData?.type === 'receipt' ? editData : null}
+            onSave={handleSave}
+            onCancel={handleCancelEdit}
+            resetTrigger={formResetTrigger}
+            autoFocus={true}
+          />
+        </div>
+
+        {/* Payment Form */}
+        <div className="bg-white shadow-sm rounded-lg px-3 py-2">
+          <EntryForm
+            selectedType="payment"
+            initialDate={defaultDate}
+            selectedCBType={selectedCBType}
+            editData={editData?.type === 'payment' ? editData : null}
+            onSave={handleSave}
+            onCancel={handleCancelEdit}
+            resetTrigger={formResetTrigger}
+            autoFocus={false}
+          />
+        </div>
       </div>
 
-      {/* Recent 20 Transactions */}
+      {/* Recent 5 Transactions */}
       <div className="flex-1 bg-white shadow-sm mx-2 mb-2 rounded-lg overflow-hidden flex flex-col">
         <div className="bg-gray-100 border-b border-gray-300 px-3 py-1.5 flex justify-between items-center">
           <div>
-            <h2 className="text-sm font-semibold text-gray-800">Recent Transactions (Last 20)</h2>
+            <h2 className="text-sm font-semibold text-gray-800">Recent Transactions (Last 5)</h2>
             <p className="text-xs text-gray-600">FY: {getFinancialYearDisplay(selectedFY)}</p>
           </div>
           {/* Search */}
@@ -223,8 +227,8 @@ export default function EntryPage({ selectedFY, onNavigate }: EntryPageProps) {
               type="text"
               placeholder="Search..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+              onChange={(e) => setSearchQuery(toProperCase(e.target.value))}
+              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
             />
           </div>
           {/* View Full Transactions Link */}

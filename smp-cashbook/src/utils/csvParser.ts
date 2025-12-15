@@ -40,6 +40,7 @@ export interface ReceiptEntry {
   amount: number;
   head_of_accounts: string;
   notes: string;
+  cb_type?: 'aided' | 'unaided';
 }
 
 // Fee head of accounts mapping
@@ -148,7 +149,7 @@ function parseCSVLine(line: string): string[] {
  * Convert entire CSV to aggregated receipt entries
  * Groups by date and head of account, summing amounts and tracking receipt number range
  */
-export function convertCSVToReceipts(csvText: string): ReceiptEntry[] {
+export function convertCSVToReceipts(csvText: string, cbType: 'aided' | 'unaided' = 'aided'): ReceiptEntry[] {
   const rows = parseCSV(csvText);
 
   // Group by date and head of account
@@ -208,6 +209,7 @@ export function convertCSVToReceipts(csvText: string): ReceiptEntry[] {
       amount: item.totalAmount,
       head_of_accounts: `${item.head_of_accounts} Fee`,
       notes: `College Fee Collection, Rpt No From: ${fromRpt} To: ${toRpt}`,
+      cb_type: cbType,
     });
   });
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { convertCSVToReceipts } from '../utils/csvParser';
 import { db } from '../services/database';
+import type { CBType } from '../types';
 
 interface ImportResult {
   success: boolean;
@@ -9,13 +10,22 @@ interface ImportResult {
   errors: Array<{ index: number; entry: any; error: string }>;
 }
 
-const FeeImportPage: React.FC = () => {
+interface FeeImportPageProps {
+  selectedCBType: CBType;
+}
+
+const FeeImportPage: React.FC<FeeImportPageProps> = ({ selectedCBType }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [preview, setPreview] = useState<any[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Get the actual cb_type for entries ('both' defaults to 'aided')
+  const getActualCBType = (): 'aided' | 'unaided' => {
+    return selectedCBType === 'unaided' ? 'unaided' : 'aided';
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -32,7 +42,7 @@ const FeeImportPage: React.FC = () => {
 
     // Read and preview the file
     const text = await selectedFile.text();
-    const receipts = convertCSVToReceipts(text);
+    const receipts = convertCSVToReceipts(text, getActualCBType());
     setPreview(receipts.slice(0, 10)); // Show first 10 entries
   };
 
@@ -51,7 +61,10 @@ const FeeImportPage: React.FC = () => {
 
     try {
       const text = await file.text();
-      const receipts = convertCSVToReceipts(text);
+      const receipts = convertCSVToReceipts(text, getActualCBType());
+
+      console.log('🔍 FeeImportPage - Importing with cb_type:', getActualCBType());
+      console.log('🔍 FeeImportPage - First receipt cb_type:', receipts[0]?.cb_type);
 
       if (receipts.length === 0) {
         alert('No valid entries found in the CSV file');

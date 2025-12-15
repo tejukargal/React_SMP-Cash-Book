@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { parseSalaryCSVWithSummary, type MonthlySummary } from '../utils/salaryCSVParser';
 import { db } from '../services/database';
+import type { CBType } from '../types';
 
 interface ImportResult {
   success: boolean;
@@ -9,7 +10,11 @@ interface ImportResult {
   errors: Array<{ index: number; entry: any; error: string }>;
 }
 
-const SalaryImportPage: React.FC = () => {
+interface SalaryImportPageProps {
+  selectedCBType: CBType;
+}
+
+const SalaryImportPage: React.FC<SalaryImportPageProps> = ({ selectedCBType }) => {
   const [file, setFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
@@ -17,6 +22,11 @@ const SalaryImportPage: React.FC = () => {
   const [summary, setSummary] = useState<MonthlySummary[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Get the actual cb_type for entries ('both' defaults to 'aided')
+  const getActualCBType = (): 'aided' | 'unaided' => {
+    return selectedCBType === 'unaided' ? 'unaided' : 'aided';
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -33,7 +43,7 @@ const SalaryImportPage: React.FC = () => {
 
     // Read and preview the file
     const text = await selectedFile.text();
-    const result = parseSalaryCSVWithSummary(text);
+    const result = parseSalaryCSVWithSummary(text, getActualCBType());
     setPreview(result.entries.slice(0, 20)); // Show first 20 entries
     setSummary(result.summary); // Set the monthly summary
   };
@@ -53,8 +63,11 @@ const SalaryImportPage: React.FC = () => {
 
     try {
       const text = await file.text();
-      const result = parseSalaryCSVWithSummary(text);
+      const result = parseSalaryCSVWithSummary(text, getActualCBType());
       const entries = result.entries;
+
+      console.log('🔍 SalaryImportPage - Importing with cb_type:', getActualCBType());
+      console.log('🔍 SalaryImportPage - First entry cb_type:', entries[0]?.cb_type);
 
       if (entries.length === 0) {
         alert('No valid entries found in the CSV file');
