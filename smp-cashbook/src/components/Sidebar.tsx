@@ -1,12 +1,14 @@
 import type { AppPage, CBType } from '../types';
+import { getFinancialYearDisplay } from '../utils/financialYear';
 
 interface SidebarProps {
   currentPage: AppPage;
   onNavigate: (page: AppPage) => void;
   selectedCBType: CBType;
+  selectedFY: string;
 }
 
-export default function Sidebar({ currentPage, onNavigate, selectedCBType }: SidebarProps) {
+export default function Sidebar({ currentPage, onNavigate, selectedCBType, selectedFY }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard' as AppPage, label: 'Dashboard', icon: '🏠' },
     { id: 'entry' as AppPage, label: 'New Entry', icon: '➕' },
@@ -29,13 +31,19 @@ export default function Sidebar({ currentPage, onNavigate, selectedCBType }: Sid
 
       {/* CB Type Indicator */}
       <div className="px-3 py-2 bg-blue-800 border-b border-blue-600">
-        <p className="text-[10px] text-blue-200 mb-1">Cashbook Type:</p>
-        <div className="flex items-center gap-1">
-          <span className="text-xs font-semibold">
-            {selectedCBType === 'aided' && '🟢 Aided'}
-            {selectedCBType === 'unaided' && '🟡 Unaided'}
-            {selectedCBType === 'both' && '🔵 Both (Combined)'}
-          </span>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[9px] text-blue-200 mb-0.5">CB Type:</p>
+            <span className="text-xs font-semibold">
+              {selectedCBType === 'aided' && '🟢 Aided'}
+              {selectedCBType === 'unaided' && '🟡 Unaided'}
+              {selectedCBType === 'both' && '🔵 Both'}
+            </span>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] text-blue-200 mb-0.5">FY:</p>
+            <span className="text-xs font-semibold text-white">{getFinancialYearDisplay(selectedFY)}</span>
+          </div>
         </div>
       </div>
 
