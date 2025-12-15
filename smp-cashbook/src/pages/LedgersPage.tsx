@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import EntryForm from '../components/EntryForm';
 import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
-import { formatAmount, calculateRunningBalance, getTodayDate } from '../utils/helpers';
+import { formatAmount, calculateRunningBalance, getTodayDate, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import jsPDF from 'jspdf';
@@ -700,7 +700,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                 type="text"
                 placeholder="Search ledgers by name..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => setSearchQuery(toProperCase(e.target.value))}
                 className="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
             </div>

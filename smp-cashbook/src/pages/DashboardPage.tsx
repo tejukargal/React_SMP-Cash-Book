@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { CashEntry, CBType } from '../types';
-import { formatAmount } from '../utils/helpers';
+import { formatAmount, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 
@@ -248,7 +248,7 @@ export default function DashboardPage({ selectedFY, selectedCBType, onNavigate }
             type="text"
             placeholder="Search by head of account, notes, cheque no, date, or amount..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(toProperCase(e.target.value))}
             onKeyPress={handleSearchKeyPress}
             className="flex-1 px-2 py-1.5 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
