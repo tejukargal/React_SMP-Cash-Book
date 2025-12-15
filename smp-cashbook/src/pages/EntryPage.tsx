@@ -164,7 +164,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
     }
   };
 
-  // Filter entries based on search and limit to recent 20
+  // Filter entries based on search
   const filteredEntries = recentEntries
     .filter((entry) => {
       if (!searchQuery) return true;
@@ -176,8 +176,12 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
       );
     });
 
-  // For display, show only the last 5 entries (most recent) in reverse order (newest to oldest)
-  const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(-5).reverse();
+  // For display, show only the last 5 entries with newest at the top
+  // Take last 5 entries (most recent) and reverse to show newest first
+  const displayEntries = searchQuery
+    ? filteredEntries.slice().reverse() // Show all filtered entries, newest first
+    : filteredEntries.slice(-5).reverse(); // Show last 5 entries, newest first
+
   console.log('🔍 EntryPage - Displaying', displayEntries.length, 'entries (total filtered:', filteredEntries.length, ', total recent:', recentEntries.length, ')');
 
   return (
