@@ -28,9 +28,10 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
   const loadRecentEntries = async () => {
     try {
-      // Fetch entries filtered by FY and CB Type
-      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
-      console.log('🔍 EntryPage - Loaded entries:', allEntries.length, 'entries for FY:', selectedFY, 'CB Type:', selectedCBType);
+      // Fetch ALL entries without filters for Entry Page display
+      // Entry Page should show recent entries regardless of FY/CB Type filters
+      const allEntries = await db.getAllEntries();
+      console.log('🔍 EntryPage - Loaded ALL entries:', allEntries.length, 'entries (ignoring FY and CB Type filters)');
 
       // Sort entries oldest to newest
       const sortedEntries = allEntries.sort((a, b) => {
