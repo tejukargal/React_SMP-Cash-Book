@@ -21,31 +21,30 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
   // Load recent entries on mount and when FY or CB Type changes
   useEffect(() => {
-    console.log('🔍 EntryPage - useEffect triggered, reloading entries');
     loadRecentEntries();
     loadMostRecentDate();
   }, [selectedFY, selectedCBType]);
 
   const loadRecentEntries = async () => {
     try {
-      // Fetch ALL entries without filters for Entry Page display
-      // Entry Page should show recent entries regardless of FY/CB Type filters
-      const allEntries = await db.getAllEntries();
-      console.log('🔍 EntryPage - Loaded ALL entries:', allEntries.length, 'entries (ignoring FY and CB Type filters)');
+      // Fetch entries filtered by FY and CB Type
+      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
 
-      // Sort entries oldest to newest
+      // Sort entries newest to oldest (for Entry page display)
       const sortedEntries = allEntries.sort((a, b) => {
         const [dayA, monthA, yearA] = a.date.split('/').map(Number);
         const [dayB, monthB, yearB] = b.date.split('/').map(Number);
         const dateA = new Date(2000 + yearA, monthA - 1, dayA);
         const dateB = new Date(2000 + yearB, monthB - 1, dayB);
-        return dateA.getTime() - dateB.getTime();
+        // Sort descending (newest first) - also use created_at as secondary sort
+        const dateCompare = dateB.getTime() - dateA.getTime();
+        if (dateCompare !== 0) return dateCompare;
+        // If same date, sort by created_at (most recent first)
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
 
       // Force update by creating new array with all sorted entries
-      // This is needed for correct closing balance calculation
       setRecentEntries(sortedEntries.map(entry => ({ ...entry })));
-      console.log('🔍 EntryPage - Set recentEntries state with', sortedEntries.length, 'entries');
     } catch (error) {
       console.error('Error loading recent entries:', error);
     }
@@ -176,13 +175,19 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
       );
     });
 
-  // For display, show only the last 5 entries with newest at the top
-  // Take last 5 entries (most recent) and reverse to show newest first
-  const displayEntries = searchQuery
-    ? filteredEntries.slice().reverse() // Show all filtered entries, newest first
-    : filteredEntries.slice(-5).reverse(); // Show last 5 entries, newest first
+  // Create chronologically sorted array for closing balance calculation (oldest to newest)
+  const chronologicalEntries = [...filteredEntries].sort((a, b) => {
+    const [dayA, monthA, yearA] = a.date.split('/').map(Number);
+    const [dayB, monthB, yearB] = b.date.split('/').map(Number);
+    const dateA = new Date(2000 + yearA, monthA - 1, dayA);
+    const dateB = new Date(2000 + yearB, monthB - 1, dayB);
+    const dateCompare = dateA.getTime() - dateB.getTime();
+    if (dateCompare !== 0) return dateCompare;
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
 
-  console.log('🔍 EntryPage - Displaying', displayEntries.length, 'entries (total filtered:', filteredEntries.length, ', total recent:', recentEntries.length, ')');
+  // For display, show only the first 5 entries (already sorted newest to oldest)
+  const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(0, 5);
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
@@ -287,9 +292,9 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
               </thead>
               <tbody>
                 {displayEntries.map((entry) => {
-                  // Find the index in the full filteredEntries array for correct closing balance
-                  const fullIndex = filteredEntries.findIndex(e => e.id === entry.id);
-                  const closingBalance = calculateClosingBalance(filteredEntries, fullIndex);
+                  // Find the index in chronological array for correct closing balance
+                  const chronoIndex = chronologicalEntries.findIndex(e => e.id === entry.id);
+                  const closingBalance = calculateClosingBalance(chronologicalEntries, chronoIndex);
                   const rowBgColor =
                     entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
 
