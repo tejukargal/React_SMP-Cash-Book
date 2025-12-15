@@ -188,27 +188,99 @@ exports.handler = async (event, context) => {
     // ===== DELETE ALL ENTRIES (must come before DELETE by ID) =====
     // Supports optional cb_type query parameter to filter deletions
     if (method === 'DELETE' && route === 'entries/delete-all') {
-      const { cb_type } = queryParams;
+      const { cb_type, fy } = queryParams;
 
       let query = 'DELETE FROM cash_entries';
       const params = [];
+      const conditions = [];
 
       // Add WHERE clause if cb_type is specified
       if (cb_type && (cb_type === 'aided' || cb_type === 'unaided')) {
-        query += ' WHERE cb_type = $1';
+        conditions.push(`cb_type = $${params.length + 1}`);
         params.push(cb_type);
+      }
+
+      // Add WHERE clause if financial year is specified
+      if (fy) {
+        conditions.push(`financial_year = $${params.length + 1}`);
+        params.push(fy);
+      }
+
+      // Build final query
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
       }
 
       const result = await pool.query(query, params);
       const deletedCount = result.rowCount || 0;
 
       const cbTypeLabel = cb_type === 'aided' ? 'Aided' : cb_type === 'unaided' ? 'Unaided' : 'all';
-      console.log(`✅ Deleted ${cbTypeLabel} entries: ${deletedCount} records removed`);
+      const fyLabel = fy ? ` for FY ${fy}` : '';
+      console.log(`✅ Deleted ${cbTypeLabel} entries${fyLabel}: ${deletedCount} records removed`);
 
       return sendResponse(200, {
         success: true,
         deleted: deletedCount,
-        message: `Successfully deleted ${deletedCount} ${cbTypeLabel} entries`
+        message: `Successfully deleted ${deletedCount} ${cbTypeLabel} entries${fyLabel}`
+      });
+    }
+
+    // ===== GET DASHBOARD SUMMARY (optimized for large datasets) =====
+    if (method === 'GET' && route === 'dashboard/summary') {
+      const { fy, cb_type } = queryParams;
+
+      const params = [];
+      const conditions = [];
+
+      if (fy) {
+        conditions.push(`financial_year = $${params.length + 1}`);
+        params.push(fy);
+      }
+
+      if (cb_type && cb_type !== 'both') {
+        conditions.push(`cb_type = $${params.length + 1}`);
+        params.push(cb_type);
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      // Get summary statistics in a single query
+      const summaryQuery = `
+        SELECT
+          COUNT(*) FILTER (WHERE type = 'receipt') AS receipt_count,
+          COUNT(*) FILTER (WHERE type = 'payment') AS payment_count,
+          COALESCE(SUM(amount) FILTER (WHERE type = 'receipt'), 0) AS total_receipts,
+          COALESCE(SUM(amount) FILTER (WHERE type = 'payment'), 0) AS total_payments,
+          COUNT(DISTINCT head_of_accounts) FILTER (WHERE type = 'receipt') AS receipt_ledger_count,
+          COUNT(DISTINCT head_of_accounts) FILTER (WHERE type = 'payment') AS payment_ledger_count
+        FROM cash_entries
+        ${whereClause}
+      `;
+
+      const summaryResult = await pool.query(summaryQuery, params);
+      const summary = summaryResult.rows[0];
+
+      // Get recent 5 transactions
+      const recentQuery = `
+        SELECT * FROM cash_entries
+        ${whereClause}
+        ORDER BY created_at DESC, id DESC
+        LIMIT 5
+      `;
+
+      const recentResult = await pool.query(recentQuery, params);
+
+      return sendResponse(200, {
+        summary: {
+          receiptCount: parseInt(summary.receipt_count) || 0,
+          paymentCount: parseInt(summary.payment_count) || 0,
+          totalReceipts: parseFloat(summary.total_receipts) || 0,
+          totalPayments: parseFloat(summary.total_payments) || 0,
+          balance: (parseFloat(summary.total_receipts) || 0) - (parseFloat(summary.total_payments) || 0),
+          receiptLedgerCount: parseInt(summary.receipt_ledger_count) || 0,
+          paymentLedgerCount: parseInt(summary.payment_ledger_count) || 0,
+        },
+        recentTransactions: recentResult.rows,
       });
     }
 

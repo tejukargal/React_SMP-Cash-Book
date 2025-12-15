@@ -26,7 +26,7 @@ export interface EntryFormData {
 
 export type AppStep = 'select-type' | 'fill-form';
 
-export type AppPage = 'dashboard' | 'entry' | 'transactions' | 'ledgers' | 'reports' | 'settings' | 'import' | 'salary-import';
+export type AppPage = 'dashboard' | 'entry' | 'transactions' | 'ledgers' | 'reports' | 'settings' | 'import' | 'salary-import' | 'transaction-import';
 
 export interface AutocompleteOption {
   value: string;

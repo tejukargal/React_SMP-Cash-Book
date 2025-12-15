@@ -44,13 +44,20 @@ function calculateFinancialYear(dateStr) {
   return `${year.toString().padStart(2, '0')}-${nextYear.toString().padStart(2, '0')}`;
 }
 
-// Run database migration on startup
+// Run database migrations on startup
 async function runMigration() {
   try {
-    const migrationPath = path.join(__dirname, 'migrations', 'add_financial_year.sql');
-    const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
-    await pool.query(migrationSQL);
-    console.log('✅ Database migration completed successfully');
+    // Run financial year migration
+    const fyMigrationPath = path.join(__dirname, 'migrations', 'add_financial_year.sql');
+    const fyMigrationSQL = fs.readFileSync(fyMigrationPath, 'utf8');
+    await pool.query(fyMigrationSQL);
+
+    // Run performance indexes migration
+    const indexMigrationPath = path.join(__dirname, 'migrations', 'add_performance_indexes.sql');
+    const indexMigrationSQL = fs.readFileSync(indexMigrationPath, 'utf8');
+    await pool.query(indexMigrationSQL);
+
+    console.log('✅ Database migrations completed successfully');
   } catch (error) {
     console.error('❌ Migration error:', error.message);
   }
@@ -70,11 +77,78 @@ pool.query('SELECT NOW()', async (err, res) => {
 });
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'SMP Cash Book API is running' });
+});
+
+// Get dashboard summary (optimized for large datasets)
+app.get('/api/dashboard/summary', async (req, res) => {
+  try {
+    const { fy, cb_type } = req.query;
+
+    const params = [];
+    const conditions = [];
+
+    // Add FY filter if provided
+    if (fy) {
+      conditions.push(`financial_year = $${params.length + 1}`);
+      params.push(fy);
+    }
+
+    // Add CB type filter if provided
+    if (cb_type && cb_type !== 'both') {
+      conditions.push(`cb_type = $${params.length + 1}`);
+      params.push(cb_type);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Get summary statistics in a single query
+    const summaryQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE type = 'receipt') AS receipt_count,
+        COUNT(*) FILTER (WHERE type = 'payment') AS payment_count,
+        COALESCE(SUM(amount) FILTER (WHERE type = 'receipt'), 0) AS total_receipts,
+        COALESCE(SUM(amount) FILTER (WHERE type = 'payment'), 0) AS total_payments,
+        COUNT(DISTINCT head_of_accounts) FILTER (WHERE type = 'receipt') AS receipt_ledger_count,
+        COUNT(DISTINCT head_of_accounts) FILTER (WHERE type = 'payment') AS payment_ledger_count
+      FROM cash_entries
+      ${whereClause}
+    `;
+
+    const summaryResult = await pool.query(summaryQuery, params);
+    const summary = summaryResult.rows[0];
+
+    // Get recent 5 transactions
+    const recentQuery = `
+      SELECT * FROM cash_entries
+      ${whereClause}
+      ORDER BY created_at DESC, id DESC
+      LIMIT 5
+    `;
+
+    const recentResult = await pool.query(recentQuery, params);
+
+    res.json({
+      summary: {
+        receiptCount: parseInt(summary.receipt_count) || 0,
+        paymentCount: parseInt(summary.payment_count) || 0,
+        totalReceipts: parseFloat(summary.total_receipts) || 0,
+        totalPayments: parseFloat(summary.total_payments) || 0,
+        balance: (parseFloat(summary.total_receipts) || 0) - (parseFloat(summary.total_payments) || 0),
+        receiptLedgerCount: parseInt(summary.receipt_ledger_count) || 0,
+        paymentLedgerCount: parseInt(summary.payment_ledger_count) || 0,
+      },
+      recentTransactions: recentResult.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching dashboard summary:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard summary', details: error.message });
+  }
 });
 
 // Get all entries sorted by date (newest first), optionally filtered by FY and CB Type
@@ -300,27 +374,40 @@ app.put('/api/entries/:id', async (req, res) => {
 // Supports optional cb_type query parameter to filter deletions
 app.delete('/api/entries/delete-all', async (req, res) => {
   try {
-    const { cb_type } = req.query;
+    const { cb_type, fy } = req.query;
 
     let query = 'DELETE FROM cash_entries';
     const params = [];
+    const conditions = [];
 
     // Add WHERE clause if cb_type is specified
     if (cb_type && (cb_type === 'aided' || cb_type === 'unaided')) {
-      query += ' WHERE cb_type = $1';
+      conditions.push(`cb_type = $${params.length + 1}`);
       params.push(cb_type);
+    }
+
+    // Add WHERE clause if financial year is specified
+    if (fy) {
+      conditions.push(`financial_year = $${params.length + 1}`);
+      params.push(fy);
+    }
+
+    // Build final query
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
     }
 
     const result = await pool.query(query, params);
     const deletedCount = result.rowCount || 0;
 
     const cbTypeLabel = cb_type === 'aided' ? 'Aided' : cb_type === 'unaided' ? 'Unaided' : 'all';
-    console.log(`✅ Deleted ${cbTypeLabel} entries: ${deletedCount} records removed`);
+    const fyLabel = fy ? ` for FY ${fy}` : '';
+    console.log(`✅ Deleted ${cbTypeLabel} entries${fyLabel}: ${deletedCount} records removed`);
 
     res.json({
       success: true,
       deleted: deletedCount,
-      message: `Successfully deleted ${deletedCount} ${cbTypeLabel} entries`
+      message: `Successfully deleted ${deletedCount} ${cbTypeLabel} entries${fyLabel}`
     });
   } catch (error) {
     console.error('Error deleting entries:', error);

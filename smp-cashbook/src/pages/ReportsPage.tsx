@@ -60,11 +60,11 @@ export default function ReportsPage({ selectedFY, selectedCBType }: ReportsPageP
       }
     });
 
-    // Convert to array and sort by date (newest first)
+    // Convert to array and sort by date (oldest first)
     return Object.values(grouped).sort((a, b) => {
       const dateA = parseDate(a.date);
       const dateB = parseDate(b.date);
-      return dateB.getTime() - dateA.getTime();
+      return dateA.getTime() - dateB.getTime();
     });
   };
 

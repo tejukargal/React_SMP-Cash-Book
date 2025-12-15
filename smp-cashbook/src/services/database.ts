@@ -14,6 +14,48 @@ async function handleResponse<T>(response: Response): Promise<T> {
 
 // Database Service - Connected to Nile via Backend API
 export const db = {
+  // Get dashboard summary (optimized for large datasets)
+  async getDashboardSummary(financialYear?: string, cbType?: 'aided' | 'unaided' | 'both'): Promise<{
+    summary: {
+      receiptCount: number;
+      paymentCount: number;
+      totalReceipts: number;
+      totalPayments: number;
+      balance: number;
+      receiptLedgerCount: number;
+      paymentLedgerCount: number;
+    };
+    recentTransactions: CashEntry[];
+  }> {
+    try {
+      const params = new URLSearchParams();
+      if (financialYear) params.append('fy', financialYear);
+      if (cbType && cbType !== 'both') params.append('cb_type', cbType);
+
+      const url = params.toString()
+        ? `${API_BASE_URL}/dashboard/summary?${params.toString()}`
+        : `${API_BASE_URL}/dashboard/summary`;
+
+      const response = await fetch(url);
+      const data = await handleResponse<{
+        summary: {
+          receiptCount: number;
+          paymentCount: number;
+          totalReceipts: number;
+          totalPayments: number;
+          balance: number;
+          receiptLedgerCount: number;
+          paymentLedgerCount: number;
+        };
+        recentTransactions: CashEntry[];
+      }>(response);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch dashboard summary:', error);
+      throw error;
+    }
+  },
+
   // Get all entries sorted by date (newest first), optionally filtered by FY and CB Type
   async getAllEntries(financialYear?: string, cbType?: 'aided' | 'unaided' | 'both'): Promise<CashEntry[]> {
     try {
@@ -260,19 +302,22 @@ export const db = {
     }
   },
 
-  // Delete all entries (optionally filtered by CB Type)
-  async deleteAllEntries(cbType?: 'aided' | 'unaided' | 'both'): Promise<{ success: boolean; deleted: number }> {
+  // Delete all entries (optionally filtered by CB Type and Financial Year)
+  async deleteAllEntries(cbType?: 'aided' | 'unaided' | 'both', financialYear?: string): Promise<{ success: boolean; deleted: number }> {
     try {
       const params = new URLSearchParams();
       if (cbType && cbType !== 'both') {
         params.append('cb_type', cbType);
+      }
+      if (financialYear) {
+        params.append('fy', financialYear);
       }
 
       const url = params.toString()
         ? `${API_BASE_URL}/entries/delete-all?${params.toString()}`
         : `${API_BASE_URL}/entries/delete-all`;
 
-      console.log('🔍 Database Service - Deleting entries with cb_type filter:', cbType || 'all');
+      console.log('🔍 Database Service - Deleting entries with filters - cb_type:', cbType || 'all', 'fy:', financialYear || 'all');
 
       const response = await fetch(url, {
         method: 'DELETE',

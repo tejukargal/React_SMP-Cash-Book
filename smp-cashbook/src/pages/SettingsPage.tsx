@@ -69,12 +69,12 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
     setDeleteError('');
 
     try {
-      const result = await db.deleteAllEntries(localCBType);
+      const result = await db.deleteAllEntries(localCBType, selectedFY);
       setShowDeleteConfirm(false);
       setDeletePassword('');
 
       const cbTypeLabel = localCBType === 'aided' ? 'Aided' : localCBType === 'unaided' ? 'Unaided' : 'All (Both Aided & Unaided)';
-      showSuccessMessage(`${cbTypeLabel} data has been deleted successfully (${result.deleted} entries)`);
+      showSuccessMessage(`${cbTypeLabel} data for FY ${getFinancialYearDisplay(selectedFY)} has been deleted successfully (${result.deleted} entries)`);
     } catch (error) {
       console.error('Failed to delete data:', error);
       setDeleteError('Failed to delete data. Please try again.');
@@ -413,17 +413,17 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
           <div className="bg-red-50 border border-red-200 p-4 rounded-md">
             {localCBType === 'aided' && (
               <p className="text-sm text-red-800 mb-4">
-                <strong>Warning:</strong> This action will permanently delete all <strong>Aided</strong> cashbook entries from the database. This cannot be undone!
+                <strong>Warning:</strong> This action will permanently delete all <strong>Aided</strong> cashbook entries for <strong>FY {getFinancialYearDisplay(selectedFY)}</strong> from the database. This cannot be undone!
               </p>
             )}
             {localCBType === 'unaided' && (
               <p className="text-sm text-red-800 mb-4">
-                <strong>Warning:</strong> This action will permanently delete all <strong>Unaided</strong> cashbook entries from the database. This cannot be undone!
+                <strong>Warning:</strong> This action will permanently delete all <strong>Unaided</strong> cashbook entries for <strong>FY {getFinancialYearDisplay(selectedFY)}</strong> from the database. This cannot be undone!
               </p>
             )}
             {localCBType === 'both' && (
               <p className="text-sm text-red-800 mb-4">
-                <strong>Warning:</strong> This action will permanently delete <strong>ALL</strong> cashbook entries (both Aided and Unaided) from the database. This cannot be undone!
+                <strong>Warning:</strong> This action will permanently delete <strong>ALL</strong> cashbook entries (both Aided and Unaided) for <strong>FY {getFinancialYearDisplay(selectedFY)}</strong> from the database. This cannot be undone!
               </p>
             )}
 

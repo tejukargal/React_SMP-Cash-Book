@@ -8,6 +8,7 @@ import ReportsPage from './pages/ReportsPage';
 import SettingsPage from './pages/SettingsPage';
 import FeeImportPage from './pages/FeeImportPage';
 import SalaryImportPage from './pages/SalaryImportPage';
+import TransactionImportPage from './pages/TransactionImportPage';
 import type { AppPage, CBType } from './types';
 import { getCurrentFinancialYear } from './utils/financialYear';
 
@@ -28,7 +29,7 @@ function App() {
   const handleFinancialYearChange = (fy: string) => {
     setSelectedFY(fy);
     // Refresh data when FY changes
-    if (currentPage === 'dashboard' || currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports') {
+    if (currentPage === 'dashboard' || currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports' || currentPage === 'transaction-import') {
       // This will cause a re-render with new FY
       setCurrentPage(currentPage);
     }
@@ -38,7 +39,7 @@ function App() {
     setSelectedCBType(cbType);
     localStorage.setItem('selectedCBType', cbType);
     // Refresh data when CB Type changes
-    if (currentPage === 'dashboard' || currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports') {
+    if (currentPage === 'dashboard' || currentPage === 'entry' || currentPage === 'transactions' || currentPage === 'ledgers' || currentPage === 'reports' || currentPage === 'transaction-import') {
       // This will cause a re-render with new CB Type
       setCurrentPage(currentPage);
     }
@@ -69,6 +70,7 @@ function App() {
             {currentPage === 'settings' && 'Settings'}
             {currentPage === 'import' && 'Import Fee Data'}
             {currentPage === 'salary-import' && 'Import Salary Data'}
+            {currentPage === 'transaction-import' && 'Import Transaction Data'}
           </h1>
           <p className="text-xs text-blue-100 h-4">
             {currentPage === 'dashboard' && 'Overview of your cash book with summaries and quick search'}
@@ -79,6 +81,7 @@ function App() {
             {currentPage === 'settings' && 'Configure application settings'}
             {currentPage === 'import' && 'Import student fee collection data from CSV files'}
             {currentPage === 'salary-import' && 'Import staff salary data from CSV files'}
+            {currentPage === 'transaction-import' && 'Import bulk transaction data from CB Report 1 format CSV files'}
           </p>
         </header>
 
@@ -92,6 +95,7 @@ function App() {
           {currentPage === 'settings' && <SettingsPage onFinancialYearChange={handleFinancialYearChange} onCBTypeChange={handleCBTypeChange} selectedCBType={selectedCBType} />}
           {currentPage === 'import' && <FeeImportPage selectedCBType={selectedCBType} />}
           {currentPage === 'salary-import' && <SalaryImportPage selectedCBType={selectedCBType} />}
+          {currentPage === 'transaction-import' && <TransactionImportPage selectedFY={selectedFY} selectedCBType={selectedCBType} />}
         </div>
 
         {/* Footer */}

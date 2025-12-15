@@ -24,7 +24,8 @@
       "Bash(netlify link:*)",
       "Bash(netlify sites:list:*)",
       "Bash(netlify deploy:*)",
-      "Bash(netlify env:set:*)"
+      "Bash(netlify env:set:*)",
+      "Bash(node -e:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

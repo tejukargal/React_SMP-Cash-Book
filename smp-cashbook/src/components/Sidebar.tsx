@@ -14,6 +14,7 @@ export default function Sidebar({ currentPage, onNavigate, selectedCBType }: Sid
     { id: 'ledgers' as AppPage, label: 'Ledgers', icon: '📖' },
     { id: 'import' as AppPage, label: 'Import Fee Data', icon: '📥' },
     { id: 'salary-import' as AppPage, label: 'Import Salary Data', icon: '💰' },
+    { id: 'transaction-import' as AppPage, label: 'Import Transactions', icon: '📤' },
     { id: 'reports' as AppPage, label: 'Reports', icon: '📈' },
     { id: 'settings' as AppPage, label: 'Settings', icon: '⚙️' },
   ];

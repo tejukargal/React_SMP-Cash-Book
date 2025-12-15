@@ -21,6 +21,8 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   const [filterType, setFilterType] = useState<'all' | 'receipt' | 'payment'>('all');
   const [splitView, setSplitView] = useState<boolean>(false);
   const [cbReport2View, setCbReport2View] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [entriesPerPage] = useState<number>(100);
 
   // Load all entries on mount and when FY or CB Type changes
   useEffect(() => {
@@ -307,7 +309,7 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   };
 
   // Filter entries based on search and type filter
-  const filteredEntries = entries
+  const allFilteredEntries = entries
     .filter((entry) => {
       const matchesSearch = searchQuery
         ? entry.head_of_accounts.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -329,12 +331,23 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
       return dateA.getTime() - dateB.getTime();
     });
 
-  // Calculate totals for filtered entries
-  const totalReceipts = filteredEntries
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType, selectedFY, selectedCBType]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(allFilteredEntries.length / entriesPerPage);
+  const startIndex = (currentPage - 1) * entriesPerPage;
+  const endIndex = startIndex + entriesPerPage;
+  const filteredEntries = allFilteredEntries.slice(startIndex, endIndex);
+
+  // Calculate totals for ALL filtered entries (not just current page)
+  const totalReceipts = allFilteredEntries
     .filter((e) => e.type === 'receipt')
     .reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
 
-  const totalPayments = filteredEntries
+  const totalPayments = allFilteredEntries
     .filter((e) => e.type === 'payment')
     .reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
 
@@ -481,7 +494,7 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
         <div className="bg-gray-100 border-b border-gray-300 px-3 py-1.5 flex justify-between items-center">
           <div>
             <h2 className="text-sm font-semibold text-gray-800">
-              All Transactions ({filteredEntries.length})
+              All Transactions ({allFilteredEntries.length} total{allFilteredEntries.length > entriesPerPage ? `, showing ${startIndex + 1}-${Math.min(endIndex, allFilteredEntries.length)}` : ''})
             </h2>
             <p className="text-xs text-gray-600">FY: {getFinancialYearDisplay(selectedFY)}</p>
           </div>
@@ -917,8 +930,31 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
           )}
         </div>
 
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="bg-gray-50 border-t border-gray-300 px-3 py-2 flex justify-center items-center gap-4">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-gray-700">
+              Page <span className="font-bold">{currentPage}</span> of <span className="font-bold">{totalPages}</span>
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1 text-xs font-medium bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              Next
+            </button>
+          </div>
+        )}
+
         {/* Summary Footer */}
-        {filteredEntries.length > 0 && (
+        {allFilteredEntries.length > 0 && (
           <div className="bg-gray-100 border-t-2 border-gray-300 px-3 py-1.5 sticky bottom-0">
             <div className="flex justify-end items-center gap-4">
               <div className="flex items-center gap-1">

@@ -29,6 +29,13 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [sideBySideView, setSideBySideView] = useState<string | null>(null); // Stores ledger name for side-by-side view
 
+  // Parse date from dd/mm/yy format to Date object
+  const parseDate = (dateStr: string): Date => {
+    const [day, month, year] = dateStr.split('/').map(Number);
+    const fullYear = year < 100 ? 2000 + year : year;
+    return new Date(fullYear, month - 1, day);
+  };
+
   // Load all entries and compute ledgers
   useEffect(() => {
     loadEntries();
@@ -79,11 +86,9 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
       (entry) => entry.head_of_accounts === ledger.name && entry.type === ledger.type
     );
 
-    // Sort by date (most recent first)
+    // Sort by date (oldest first)
     const sortedTransactions = transactions.sort((a, b) => {
-      const dateA = new Date(a.date.split('/').reverse().join('-'));
-      const dateB = new Date(b.date.split('/').reverse().join('-'));
-      return dateB.getTime() - dateA.getTime();
+      return parseDate(a.date).getTime() - parseDate(b.date).getTime();
     });
 
     setLedgerTransactions(sortedTransactions);
@@ -477,17 +482,13 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
     const receiptTransactions = entries
       .filter((entry) => entry.head_of_accounts === sideBySideView && entry.type === 'receipt')
       .sort((a, b) => {
-        const dateA = new Date(a.date.split('/').reverse().join('-'));
-        const dateB = new Date(b.date.split('/').reverse().join('-'));
-        return dateB.getTime() - dateA.getTime();
+        return parseDate(a.date).getTime() - parseDate(b.date).getTime();
       });
 
     const paymentTransactions = entries
       .filter((entry) => entry.head_of_accounts === sideBySideView && entry.type === 'payment')
       .sort((a, b) => {
-        const dateA = new Date(a.date.split('/').reverse().join('-'));
-        const dateB = new Date(b.date.split('/').reverse().join('-'));
-        return dateB.getTime() - dateA.getTime();
+        return parseDate(a.date).getTime() - parseDate(b.date).getTime();
       });
 
     const receiptTotal = receiptTransactions.reduce((sum, entry) => {
@@ -562,13 +563,13 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                 <table className="w-full border-collapse">
                   <thead className="bg-gray-200 sticky top-0 z-10">
                     <tr>
-                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
+                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300" style={{ width: '70px' }}>
                         Date
                       </th>
-                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
+                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300" style={{ width: '70px' }}>
                         Cheque No
                       </th>
-                      <th className="text-right px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
+                      <th className="text-right px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300" style={{ width: '70px' }}>
                         Amount
                       </th>
                       <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
@@ -589,7 +590,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                         <td className="px-2 py-1 text-xs text-gray-800 text-right font-medium">
                           {formatAmount(entry.amount)}
                         </td>
-                        <td className="px-2 py-1 text-xs text-gray-600 truncate">
+                        <td className="px-2 py-1 text-xs text-gray-600">
                           {entry.notes || '-'}
                         </td>
                       </tr>
@@ -619,13 +620,13 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                 <table className="w-full border-collapse">
                   <thead className="bg-gray-200 sticky top-0 z-10">
                     <tr>
-                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
+                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300" style={{ width: '70px' }}>
                         Date
                       </th>
-                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
+                      <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300" style={{ width: '70px' }}>
                         Cheque No
                       </th>
-                      <th className="text-right px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
+                      <th className="text-right px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300" style={{ width: '70px' }}>
                         Amount
                       </th>
                       <th className="text-left px-2 py-1 text-xs font-semibold text-gray-700 border-b border-gray-300">
@@ -646,7 +647,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                         <td className="px-2 py-1 text-xs text-gray-800 text-right font-medium">
                           {formatAmount(entry.amount)}
                         </td>
-                        <td className="px-2 py-1 text-xs text-gray-600 truncate">
+                        <td className="px-2 py-1 text-xs text-gray-600">
                           {entry.notes || '-'}
                         </td>
                       </tr>

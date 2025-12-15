@@ -44,18 +44,15 @@ export default function DashboardPage({ selectedFY, selectedCBType, onNavigate }
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      // Get entries filtered by selected FY and CB Type to match transactions page
+      // Use optimized summary endpoint instead of fetching all entries
+      const { summary } = await db.getDashboardSummary(selectedFY, selectedCBType);
+
+      // Calculate closing balance
+      const closingBalance = summary.totalReceipts - summary.totalPayments;
+
+      // For time-based stats, we still need to fetch entries
+      // But we can optimize this in the future with additional API endpoints
       const entries = await db.getAllEntries(selectedFY, selectedCBType);
-
-      // Calculate stats - properly parse amounts (they might be strings)
-      const receipts = entries.filter(e => e.type === 'receipt');
-      const payments = entries.filter(e => e.type === 'payment');
-
-      const totalReceiptAmount = receipts.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
-      const totalPaymentAmount = payments.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
-
-      // Calculate closing balance - should match the net balance from transactions page
-      const closingBalance = totalReceiptAmount - totalPaymentAmount;
 
       // Get today's date in dd/mm/yy format
       const today = new Date();
@@ -81,10 +78,10 @@ export default function DashboardPage({ selectedFY, selectedCBType, onNavigate }
       }).length;
 
       setStats({
-        totalReceipts: receipts.length,
-        totalPayments: payments.length,
-        totalReceiptAmount,
-        totalPaymentAmount,
+        totalReceipts: summary.receiptCount,
+        totalPayments: summary.paymentCount,
+        totalReceiptAmount: summary.totalReceipts,
+        totalPaymentAmount: summary.totalPayments,
         closingBalance,
         todayEntries,
         thisWeekEntries,
