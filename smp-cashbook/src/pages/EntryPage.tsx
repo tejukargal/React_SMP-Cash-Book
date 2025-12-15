@@ -21,6 +21,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
   // Load recent entries on mount and when FY or CB Type changes
   useEffect(() => {
+    console.log('🔍 EntryPage - useEffect triggered, reloading entries');
     loadRecentEntries();
     loadMostRecentDate();
   }, [selectedFY, selectedCBType]);
