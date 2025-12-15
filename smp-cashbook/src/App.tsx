@@ -70,9 +70,9 @@ function App() {
             {currentPage === 'import' && 'Import Fee Data'}
             {currentPage === 'salary-import' && 'Import Salary Data'}
           </h1>
-          <p className="text-xs text-blue-100">
+          <p className="text-xs text-blue-100 h-4">
             {currentPage === 'dashboard' && 'Overview of your cash book with summaries and quick search'}
-            {currentPage === 'entry' && !successMessage && 'Create new receipt or payment entries'}
+            {currentPage === 'entry' && (successMessage ? '\u00A0' : 'Create new receipt or payment entries')}
             {currentPage === 'transactions' && 'View, edit, and manage all transactions'}
             {currentPage === 'ledgers' && 'View receipt and payment ledgers with transaction details'}
             {currentPage === 'reports' && 'Financial reports and analytics'}
