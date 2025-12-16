@@ -55,6 +55,13 @@ export default function EntryForm({
     index: number;
   }>({ field: null, index: -1 });
 
+  // Track which fields had a suggestion selected (to prevent re-showing until cleared)
+  const [selectedFields, setSelectedFields] = useState<{
+    cheque: boolean;
+    head: boolean;
+    notes: boolean;
+  }>({ cheque: false, head: false, notes: false });
+
   const [isValid, setIsValid] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -115,8 +122,9 @@ export default function EntryForm({
         notes: '',
         cb_type: getActualCBType(selectedCBType),
       }));
-      // Clear suggestions
+      // Clear suggestions and selection state
       setSuggestions({ cheque: [], head: [], notes: [] });
+      setSelectedFields({ cheque: false, head: false, notes: false });
       // Focus date input after reset (only for autoFocus form)
       if (autoFocus) {
         setTimeout(() => dateInputRef.current?.focus(), 100);
@@ -143,36 +151,49 @@ export default function EntryForm({
       clearTimeout(suggestionTimeoutRef.current);
     }
 
-    // Fetch autocomplete suggestions
-    if (name === 'cheque_no' && value.length >= 1) {
-      const suggestions = await db.getChequeNoSuggestions(value);
-      setSuggestions(prev => ({ ...prev, cheque: suggestions }));
-
-      // Auto-hide after 3 seconds
-      suggestionTimeoutRef.current = setTimeout(() => {
+    // Fetch autocomplete suggestions only if not previously selected or field is cleared
+    if (name === 'cheque_no') {
+      if (value.length === 0) {
+        // Field cleared - reset selection state
+        setSelectedFields(prev => ({ ...prev, cheque: false }));
         setSuggestions(prev => ({ ...prev, cheque: [] }));
-      }, 3000);
-    } else if (name === 'head_of_accounts' && value.length >= 2) {
-      const suggestions = await db.getHeadOfAccountsSuggestions(value);
-      setSuggestions(prev => ({ ...prev, head: suggestions }));
+      } else if (value.length >= 1 && !selectedFields.cheque) {
+        const suggestions = await db.getChequeNoSuggestions(value);
+        setSuggestions(prev => ({ ...prev, cheque: suggestions.slice(0, 1) })); // Show only 1 suggestion
 
-      // Auto-hide after 3 seconds
-      suggestionTimeoutRef.current = setTimeout(() => {
+        // Auto-hide after 3 seconds
+        suggestionTimeoutRef.current = setTimeout(() => {
+          setSuggestions(prev => ({ ...prev, cheque: [] }));
+        }, 3000);
+      }
+    } else if (name === 'head_of_accounts') {
+      if (value.length === 0) {
+        // Field cleared - reset selection state
+        setSelectedFields(prev => ({ ...prev, head: false }));
         setSuggestions(prev => ({ ...prev, head: [] }));
-      }, 3000);
-    } else if (name === 'notes' && value.length >= 2) {
-      const suggestions = await db.getNotesSuggestions(value);
-      setSuggestions(prev => ({ ...prev, notes: suggestions }));
+      } else if (value.length >= 2 && !selectedFields.head) {
+        const suggestions = await db.getHeadOfAccountsSuggestions(value);
+        setSuggestions(prev => ({ ...prev, head: suggestions.slice(0, 1) })); // Show only 1 suggestion
 
-      // Auto-hide after 3 seconds
-      suggestionTimeoutRef.current = setTimeout(() => {
+        // Auto-hide after 3 seconds
+        suggestionTimeoutRef.current = setTimeout(() => {
+          setSuggestions(prev => ({ ...prev, head: [] }));
+        }, 3000);
+      }
+    } else if (name === 'notes') {
+      if (value.length === 0) {
+        // Field cleared - reset selection state
+        setSelectedFields(prev => ({ ...prev, notes: false }));
         setSuggestions(prev => ({ ...prev, notes: [] }));
-      }, 3000);
-    } else {
-      // Clear suggestions if input is too short
-      if (name === 'cheque_no') setSuggestions(prev => ({ ...prev, cheque: [] }));
-      if (name === 'head_of_accounts') setSuggestions(prev => ({ ...prev, head: [] }));
-      if (name === 'notes') setSuggestions(prev => ({ ...prev, notes: [] }));
+      } else if (value.length >= 2 && !selectedFields.notes) {
+        const suggestions = await db.getNotesSuggestions(value);
+        setSuggestions(prev => ({ ...prev, notes: suggestions.slice(0, 1) })); // Show only 1 suggestion
+
+        // Auto-hide after 3 seconds
+        suggestionTimeoutRef.current = setTimeout(() => {
+          setSuggestions(prev => ({ ...prev, notes: [] }));
+        }, 3000);
+      }
     }
 
     setActiveSuggestion({ field: null, index: -1 });
@@ -192,6 +213,18 @@ export default function EntryForm({
         setFormData(prev => ({ ...prev, date: normalized }));
       }
     }
+  };
+
+  const handleFocus = (field: 'cheque' | 'head' | 'notes') => {
+    // Clear all other suggestions when a field gains focus
+    if (field === 'cheque') {
+      setSuggestions(prev => ({ ...prev, head: [], notes: [] }));
+    } else if (field === 'head') {
+      setSuggestions(prev => ({ ...prev, cheque: [], notes: [] }));
+    } else if (field === 'notes') {
+      setSuggestions(prev => ({ ...prev, cheque: [], head: [] }));
+    }
+    setActiveSuggestion({ field, index: -1 });
   };
 
   const handleKeyDown = (
@@ -242,6 +275,7 @@ export default function EntryForm({
         : 'notes';
 
     setFormData(prev => ({ ...prev, [fieldName]: value }));
+    setSelectedFields(prev => ({ ...prev, [field]: true })); // Mark field as selected
     clearSuggestions(field);
   };
 
@@ -260,8 +294,9 @@ export default function EntryForm({
       notes: '',
       cb_type: getActualCBType(selectedCBType),
     });
-    // Clear suggestions
+    // Clear suggestions and selection state
     setSuggestions({ cheque: [], head: [], notes: [] });
+    setSelectedFields({ cheque: false, head: false, notes: false });
     // Focus date input (only for autoFocus form)
     if (autoFocus) {
       dateInputRef.current?.focus();
@@ -344,6 +379,10 @@ export default function EntryForm({
               value={formData.date}
               onChange={handleInputChange}
               onBlur={handleDateBlur}
+              onFocus={() => {
+                // Clear all suggestions when date field is focused
+                setSuggestions({ cheque: [], head: [], notes: [] });
+              }}
               placeholder="dd/mm/yy or dd/mm/yyyy"
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
             />
@@ -359,7 +398,7 @@ export default function EntryForm({
               value={formData.cheque_no}
               onChange={handleInputChange}
               onKeyDown={(e) => handleKeyDown(e, 'cheque')}
-              onFocus={() => setActiveSuggestion({ field: 'cheque', index: -1 })}
+              onFocus={() => handleFocus('cheque')}
               onBlur={() => setTimeout(() => clearSuggestions('cheque'), 200)}
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
             />
@@ -395,6 +434,10 @@ export default function EntryForm({
               name="amount"
               value={formData.amount}
               onChange={handleInputChange}
+              onFocus={() => {
+                // Clear all suggestions when amount field is focused
+                setSuggestions({ cheque: [], head: [], notes: [] });
+              }}
               placeholder="0.00"
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm text-right"
             />
@@ -410,7 +453,7 @@ export default function EntryForm({
               value={formData.head_of_accounts}
               onChange={handleInputChange}
               onKeyDown={(e) => handleKeyDown(e, 'head')}
-              onFocus={() => setActiveSuggestion({ field: 'head', index: -1 })}
+              onFocus={() => handleFocus('head')}
               onBlur={() => setTimeout(() => clearSuggestions('head'), 200)}
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
             />
@@ -442,7 +485,7 @@ export default function EntryForm({
             value={formData.notes}
             onChange={handleInputChange}
             onKeyDown={(e) => handleKeyDown(e, 'notes')}
-            onFocus={() => setActiveSuggestion({ field: 'notes', index: -1 })}
+            onFocus={() => handleFocus('notes')}
             onBlur={() => setTimeout(() => clearSuggestions('notes'), 200)}
             rows={2}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm resize-none"
