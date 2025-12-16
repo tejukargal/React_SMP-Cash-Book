@@ -105,7 +105,7 @@ export const db = {
   },
 
   // Get autocomplete suggestions for cheque numbers (disabled)
-  async getChequeNoSuggestions(query: string): Promise<AutocompleteOption[]> {
+  async getChequeNoSuggestions(_query: string): Promise<AutocompleteOption[]> {
     // Autocomplete disabled for cheque numbers
     return [];
   },
