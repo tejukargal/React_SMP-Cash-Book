@@ -311,8 +311,8 @@ exports.handler = async (event, context) => {
             WHEN date ~ '^[0-9]{2}/[0-9]{2}/[0-9]{2}$' THEN
               TO_DATE('20' || SUBSTRING(date FROM 7 FOR 2) || '-' || SUBSTRING(date FROM 4 FOR 2) || '-' || SUBSTRING(date FROM 1 FOR 2), 'YYYY-MM-DD')
             ELSE CURRENT_DATE
-          END DESC,
-          created_at DESC
+          END ASC,
+          created_at ASC
       `;
 
       const result = await pool.query(query, params);
@@ -322,18 +322,17 @@ exports.handler = async (event, context) => {
     // ===== GET SUGGESTIONS =====
     if (method === 'GET' && route === 'suggestions/head') {
       const { query } = queryParams;
-      if (!query || query.length < 2) return sendResponse(200, []);
+      if (!query || query.length < 4) return sendResponse(200, []);
 
       const result = await pool.query(
-        `SELECT head_of_accounts as value, COUNT(*) as count
+        `SELECT head_of_accounts as value
          FROM cash_entries
          WHERE LOWER(head_of_accounts) LIKE LOWER($1)
-         GROUP BY head_of_accounts
-         ORDER BY count DESC
-         LIMIT 5`,
+         ORDER BY created_at DESC
+         LIMIT 1`,
         [`%${query}%`]
       );
-      return sendResponse(200, result.rows);
+      return sendResponse(200, result.rows.map(row => ({ value: row.value, count: 0 })));
     }
 
     if (method === 'GET' && route === 'suggestions/cheque') {
@@ -354,18 +353,17 @@ exports.handler = async (event, context) => {
 
     if (method === 'GET' && route === 'suggestions/notes') {
       const { query } = queryParams;
-      if (!query || query.length < 2) return sendResponse(200, []);
+      if (!query || query.length < 4) return sendResponse(200, []);
 
       const result = await pool.query(
-        `SELECT notes as value, COUNT(*) as count
+        `SELECT notes as value
          FROM cash_entries
          WHERE notes IS NOT NULL AND LOWER(notes) LIKE LOWER($1)
-         GROUP BY notes
-         ORDER BY count DESC
-         LIMIT 5`,
+         ORDER BY created_at DESC
+         LIMIT 1`,
         [`%${query}%`]
       );
-      return sendResponse(200, result.rows);
+      return sendResponse(200, result.rows.map(row => ({ value: row.value, count: 0 })));
     }
 
     // ===== CREATE NEW ENTRY =====

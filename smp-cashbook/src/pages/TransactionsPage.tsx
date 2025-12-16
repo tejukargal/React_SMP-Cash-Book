@@ -89,7 +89,8 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   const exportToCSV = () => {
     let csvContent = 'Date,Type,Cheque No,Amount,Head of Accounts,Notes\n';
 
-    filteredEntries.forEach((entry) => {
+    // Export ALL filtered entries, not just current page
+    allFilteredEntries.forEach((entry) => {
       csvContent += `${entry.date},${entry.type === 'receipt' ? 'Receipt' : 'Payment'},${entry.cheque_no || ''},${entry.amount},"${entry.head_of_accounts}","${entry.notes || ''}"\n`;
     });
 
@@ -117,10 +118,23 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
 
     if (cbReport2View) {
       // CB Report 2 format - Traditional Cash Book
+      // Group ALL filtered entries by date for export
+      const groupedByDateForExport = allFilteredEntries.reduce((acc, entry) => {
+        if (!acc[entry.date]) {
+          acc[entry.date] = { receipts: [], payments: [] };
+        }
+        if (entry.type === 'receipt') {
+          acc[entry.date].receipts.push(entry);
+        } else {
+          acc[entry.date].payments.push(entry);
+        }
+        return acc;
+      }, {} as Record<string, { receipts: CashEntry[]; payments: CashEntry[] }>);
+
       const tableData: any[] = [];
       let runningBalance = 0;
 
-      const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
+      const sortedDates = Object.keys(groupedByDateForExport).sort((a, b) => {
         const [dayA, monthA, yearA] = a.split('/').map(Number);
         const [dayB, monthB, yearB] = b.split('/').map(Number);
         const dateA = new Date(2000 + yearA, monthA - 1, dayA);
@@ -129,7 +143,7 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
       });
 
       sortedDates.forEach((date, groupIndex) => {
-        const group = groupedByDate[date];
+        const group = groupedByDateForExport[date];
         const dateReceipts = group.receipts.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
         const datePayments = group.payments.reduce((sum, e) => sum + parseFloat(e.amount.toString()), 0);
 
@@ -276,9 +290,9 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
         },
       });
     } else {
-      // Regular format
+      // Regular format - Export ALL filtered entries
       const tableData: any[] = [];
-      filteredEntries.forEach((entry) => {
+      allFilteredEntries.forEach((entry) => {
         tableData.push([
           entry.date,
           entry.type === 'receipt' ? 'R' : 'P',
@@ -352,6 +366,14 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
     .reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
 
   const netBalance = totalReceipts - totalPayments;
+
+  // Calculate opening balance for current page (balance of all entries before this page)
+  const openingBalanceForPage = allFilteredEntries
+    .slice(0, startIndex)
+    .reduce((balance, entry) => {
+      const amount = typeof entry.amount === 'string' ? parseFloat(entry.amount) : entry.amount;
+      return entry.type === 'receipt' ? balance + amount : balance - amount;
+    }, 0);
 
   // Group entries by date for split view
   const groupedByDate = filteredEntries.reduce((acc, entry) => {
@@ -562,15 +584,16 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
               <tbody>
                 {(() => {
                   const rows: React.ReactElement[] = [];
-                  let runningBalance = 0;
+                  // Start with opening balance from previous pages
+                  let runningBalance = openingBalanceForPage;
 
                   sortedDates.forEach((date, groupIndex) => {
                     const { receipts, payments } = groupedByDate[date];
                     const dateReceipts = receipts.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
                     const datePayments = payments.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
 
-                    // Show "By Opening Bal" row if this is not the first date
-                    if (groupIndex > 0) {
+                    // Show "By Opening Bal" row if this is not the first date (or if we're on page > 1 and this is the first date on the page)
+                    if (groupIndex > 0 || (currentPage > 1 && groupIndex === 0)) {
                       rows.push(
                         <tr key={`by-opening-${groupIndex}`} className="bg-white">
                           <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
@@ -710,7 +733,8 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
             // Split View - Receipts and Payments side by side
             <div className="p-2">
               {(() => {
-                let cumulativeClosingBalance = 0;
+                // Start with opening balance from previous pages
+                let cumulativeClosingBalance = openingBalanceForPage;
                 return sortedDates.map((date) => {
                   const { receipts, payments } = groupedByDate[date];
                   const dateReceipts = receipts.reduce((sum, e) => sum + (typeof e.amount === 'string' ? parseFloat(e.amount) : e.amount), 0);
@@ -858,7 +882,9 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
               </thead>
               <tbody>
                 {filteredEntries.map((entry, index) => {
-                  const closingBalance = calculateClosingBalance(filteredEntries, index);
+                  // Calculate actual index in the full array for correct closing balance
+                  const actualIndex = startIndex + index;
+                  const closingBalance = calculateClosingBalance(allFilteredEntries, actualIndex);
                   const rowBgColor =
                     entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
 

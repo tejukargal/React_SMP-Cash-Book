@@ -151,7 +151,7 @@ app.get('/api/dashboard/summary', async (req, res) => {
   }
 });
 
-// Get all entries sorted by date (newest first), optionally filtered by FY and CB Type
+// Get all entries sorted by date (oldest first), optionally filtered by FY and CB Type
 app.get('/api/entries', async (req, res) => {
   try {
     const { fy, cb_type } = req.query;
@@ -186,8 +186,8 @@ app.get('/api/entries', async (req, res) => {
           WHEN date ~ '^[0-9]{2}/[0-9]{2}/[0-9]{2}$' THEN
             TO_DATE('20' || SUBSTRING(date FROM 7 FOR 2) || '-' || SUBSTRING(date FROM 4 FOR 2) || '-' || SUBSTRING(date FROM 1 FOR 2), 'YYYY-MM-DD')
           ELSE CURRENT_DATE
-        END DESC,
-        created_at DESC
+        END ASC,
+        created_at ASC
     `;
 
     const result = await pool.query(query, params);
@@ -215,20 +215,19 @@ app.get('/api/entries/recent-date', async (req, res) => {
 app.get('/api/suggestions/head', async (req, res) => {
   try {
     const { query } = req.query;
-    if (!query || query.length < 2) {
+    if (!query || query.length < 4) {
       return res.json([]);
     }
 
     const result = await pool.query(
-      `SELECT head_of_accounts as value, COUNT(*) as count
+      `SELECT head_of_accounts as value
        FROM cash_entries
        WHERE LOWER(head_of_accounts) LIKE LOWER($1)
-       GROUP BY head_of_accounts
-       ORDER BY count DESC
-       LIMIT 5`,
+       ORDER BY created_at DESC
+       LIMIT 1`,
       [`%${query}%`]
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => ({ value: row.value, count: 0 })));
   } catch (error) {
     console.error('Error fetching head suggestions:', error);
     res.status(500).json({ error: 'Failed to fetch suggestions', details: error.message });
@@ -263,20 +262,19 @@ app.get('/api/suggestions/cheque', async (req, res) => {
 app.get('/api/suggestions/notes', async (req, res) => {
   try {
     const { query } = req.query;
-    if (!query || query.length < 2) {
+    if (!query || query.length < 4) {
       return res.json([]);
     }
 
     const result = await pool.query(
-      `SELECT notes as value, COUNT(*) as count
+      `SELECT notes as value
        FROM cash_entries
        WHERE notes IS NOT NULL AND LOWER(notes) LIKE LOWER($1)
-       GROUP BY notes
-       ORDER BY count DESC
-       LIMIT 5`,
+       ORDER BY created_at DESC
+       LIMIT 1`,
       [`%${query}%`]
     );
-    res.json(result.rows);
+    res.json(result.rows.map(row => ({ value: row.value, count: 0 })));
   } catch (error) {
     console.error('Error fetching notes suggestions:', error);
     res.status(500).json({ error: 'Failed to fetch suggestions', details: error.message });

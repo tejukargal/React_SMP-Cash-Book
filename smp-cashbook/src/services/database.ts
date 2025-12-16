@@ -56,7 +56,7 @@ export const db = {
     }
   },
 
-  // Get all entries sorted by date (newest first), optionally filtered by FY and CB Type
+  // Get all entries sorted by date (oldest first), optionally filtered by FY and CB Type
   async getAllEntries(financialYear?: string, cbType?: 'aided' | 'unaided' | 'both'): Promise<CashEntry[]> {
     try {
       const params = new URLSearchParams();
@@ -90,7 +90,7 @@ export const db = {
 
   // Get autocomplete suggestions for head of accounts
   async getHeadOfAccountsSuggestions(query: string): Promise<AutocompleteOption[]> {
-    if (!query || query.length < 2) return [];
+    if (!query || query.length < 4) return [];
 
     try {
       const response = await fetch(
@@ -104,25 +104,15 @@ export const db = {
     }
   },
 
-  // Get autocomplete suggestions for cheque numbers
+  // Get autocomplete suggestions for cheque numbers (disabled)
   async getChequeNoSuggestions(query: string): Promise<AutocompleteOption[]> {
-    if (!query || query.length < 1) return [];
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/suggestions/cheque?query=${encodeURIComponent(query)}`
-      );
-      const suggestions = await handleResponse<AutocompleteOption[]>(response);
-      return suggestions;
-    } catch (error) {
-      console.error('Failed to fetch cheque suggestions:', error);
-      return [];
-    }
+    // Autocomplete disabled for cheque numbers
+    return [];
   },
 
   // Get autocomplete suggestions for notes
   async getNotesSuggestions(query: string): Promise<AutocompleteOption[]> {
-    if (!query || query.length < 2) return [];
+    if (!query || query.length < 4) return [];
 
     try {
       const response = await fetch(

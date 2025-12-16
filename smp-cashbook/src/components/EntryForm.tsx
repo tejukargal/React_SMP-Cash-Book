@@ -65,13 +65,30 @@ export default function EntryForm({
   const [isValid, setIsValid] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
-  const suggestionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const chequeInputRef = useRef<HTMLInputElement>(null);
+  const headInputRef = useRef<HTMLInputElement>(null);
+  const notesInputRef = useRef<HTMLTextAreaElement>(null);
+  const isSelectingSuggestionRef = useRef(false);
+  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load edit data if editing
   useEffect(() => {
     if (editData) {
       setFormData(editData.formData);
     }
+  }, [editData]);
+
+  // Fetch and populate most recent entry date on mount (only if not editing)
+  useEffect(() => {
+    const fetchRecentDate = async () => {
+      if (!editData) {
+        const recentDate = await db.getMostRecentDate();
+        if (recentDate) {
+          setFormData(prev => ({ ...prev, date: recentDate }));
+        }
+      }
+    };
+    fetchRecentDate();
   }, [editData]);
 
   // Focus date input when form appears (only if autoFocus is enabled)
@@ -81,11 +98,11 @@ export default function EntryForm({
     }
   }, [autoFocus]);
 
-  // Cleanup timeout on unmount
+  // Cleanup debounce timeout on unmount
   useEffect(() => {
     return () => {
-      if (suggestionTimeoutRef.current) {
-        clearTimeout(suggestionTimeoutRef.current);
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
       }
     };
   }, []);
@@ -111,26 +128,28 @@ export default function EntryForm({
     setIsValid(valid);
   }, [formData]);
 
-  // Reset form fields (except date) when resetTrigger changes
+  // Reset form fields after save - only clear amount, keep other fields and highlight them
   useEffect(() => {
     if (resetTrigger > 0) {
       setFormData(prev => ({
-        date: prev.date, // Keep the date
-        cheque_no: '',
-        amount: '',
-        head_of_accounts: '',
-        notes: '',
-        cb_type: getActualCBType(selectedCBType),
+        ...prev, // Keep all fields
+        amount: '', // Clear only amount
       }));
-      // Clear suggestions and selection state
+      // Clear suggestions and selection state to allow new suggestions
       setSuggestions({ cheque: [], head: [], notes: [] });
       setSelectedFields({ cheque: false, head: false, notes: false });
-      // Focus date input after reset (only for autoFocus form)
-      if (autoFocus) {
-        setTimeout(() => dateInputRef.current?.focus(), 100);
-      }
+
+      // Highlight all fields except amount for easy replacement
+      setTimeout(() => {
+        // Select all text in date field
+        if (dateInputRef.current) {
+          dateInputRef.current.select();
+          dateInputRef.current.focus();
+        }
+        // Note: Other fields will be selected when user tabs to them
+      }, 100);
     }
-  }, [resetTrigger, autoFocus, selectedCBType]);
+  }, [resetTrigger]);
 
   const handleInputChange = async (
     e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -146,53 +165,53 @@ export default function EntryForm({
 
     setFormData(prev => ({ ...prev, [name]: processedValue }));
 
-    // Clear existing timeout
-    if (suggestionTimeoutRef.current) {
-      clearTimeout(suggestionTimeoutRef.current);
+    // Skip suggestion fetching if we're currently selecting a suggestion
+    if (isSelectingSuggestionRef.current) {
+      return;
+    }
+
+    // Clear any existing debounce timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
 
     // Fetch autocomplete suggestions only if not previously selected or field is cleared
+    // Note: Cheque No autocomplete is disabled as per requirements
     if (name === 'cheque_no') {
+      // Always clear suggestions for cheque_no field
       if (value.length === 0) {
-        // Field cleared - reset selection state
         setSelectedFields(prev => ({ ...prev, cheque: false }));
-        setSuggestions(prev => ({ ...prev, cheque: [] }));
-      } else if (value.length >= 1 && !selectedFields.cheque) {
-        const suggestions = await db.getChequeNoSuggestions(value);
-        setSuggestions(prev => ({ ...prev, cheque: suggestions.slice(0, 1) })); // Show only 1 suggestion
-
-        // Auto-hide after 3 seconds
-        suggestionTimeoutRef.current = setTimeout(() => {
-          setSuggestions(prev => ({ ...prev, cheque: [] }));
-        }, 3000);
       }
+      setSuggestions(prev => ({ ...prev, cheque: [] }));
     } else if (name === 'head_of_accounts') {
       if (value.length === 0) {
         // Field cleared - reset selection state
         setSelectedFields(prev => ({ ...prev, head: false }));
         setSuggestions(prev => ({ ...prev, head: [] }));
-      } else if (value.length >= 2 && !selectedFields.head) {
-        const suggestions = await db.getHeadOfAccountsSuggestions(value);
-        setSuggestions(prev => ({ ...prev, head: suggestions.slice(0, 1) })); // Show only 1 suggestion
-
-        // Auto-hide after 3 seconds
-        suggestionTimeoutRef.current = setTimeout(() => {
-          setSuggestions(prev => ({ ...prev, head: [] }));
-        }, 3000);
+      } else if (value.length >= 4 && !selectedFields.head) {
+        // Debounce the API call for faster perceived performance
+        debounceTimeoutRef.current = setTimeout(async () => {
+          const suggestions = await db.getHeadOfAccountsSuggestions(processedValue);
+          setSuggestions(prev => ({ ...prev, head: suggestions.slice(0, 1) })); // Show only 1 suggestion
+        }, 150);
+      } else if (value.length < 4) {
+        // Clear suggestions if less than 4 characters
+        setSuggestions(prev => ({ ...prev, head: [] }));
       }
     } else if (name === 'notes') {
       if (value.length === 0) {
         // Field cleared - reset selection state
         setSelectedFields(prev => ({ ...prev, notes: false }));
         setSuggestions(prev => ({ ...prev, notes: [] }));
-      } else if (value.length >= 2 && !selectedFields.notes) {
-        const suggestions = await db.getNotesSuggestions(value);
-        setSuggestions(prev => ({ ...prev, notes: suggestions.slice(0, 1) })); // Show only 1 suggestion
-
-        // Auto-hide after 3 seconds
-        suggestionTimeoutRef.current = setTimeout(() => {
-          setSuggestions(prev => ({ ...prev, notes: [] }));
-        }, 3000);
+      } else if (value.length >= 4 && !selectedFields.notes) {
+        // Debounce the API call for faster perceived performance
+        debounceTimeoutRef.current = setTimeout(async () => {
+          const suggestions = await db.getNotesSuggestions(processedValue);
+          setSuggestions(prev => ({ ...prev, notes: suggestions.slice(0, 1) })); // Show only 1 suggestion
+        }, 150);
+      } else if (value.length < 4) {
+        // Clear suggestions if less than 4 characters
+        setSuggestions(prev => ({ ...prev, notes: [] }));
       }
     }
 
@@ -225,6 +244,19 @@ export default function EntryForm({
       setSuggestions(prev => ({ ...prev, cheque: [], head: [] }));
     }
     setActiveSuggestion({ field, index: -1 });
+  };
+
+  const handleBlur = (field: 'cheque' | 'head' | 'notes') => {
+    // When user leaves the field, mark it as "selected" to prevent suggestions from reappearing
+    setTimeout(() => {
+      clearSuggestions(field);
+      // Mark field as selected if it has content to prevent re-showing suggestions
+      const fieldName = field === 'cheque' ? 'cheque_no' : field === 'head' ? 'head_of_accounts' : 'notes';
+      const hasContent = formData[fieldName].trim().length > 0;
+      if (hasContent) {
+        setSelectedFields(prev => ({ ...prev, [field]: true }));
+      }
+    }, 200);
   };
 
   const handleKeyDown = (
@@ -274,9 +306,22 @@ export default function EntryForm({
         ? 'head_of_accounts'
         : 'notes';
 
-    setFormData(prev => ({ ...prev, [fieldName]: value }));
-    setSelectedFields(prev => ({ ...prev, [field]: true })); // Mark field as selected
+    // Set flag to prevent handleInputChange from fetching suggestions
+    isSelectingSuggestionRef.current = true;
+
+    // Mark field as selected to prevent suggestions from reappearing
+    setSelectedFields(prev => ({ ...prev, [field]: true }));
+
+    // Clear suggestions immediately
     clearSuggestions(field);
+
+    // Update form data
+    setFormData(prev => ({ ...prev, [fieldName]: value }));
+
+    // Reset the flag after all events have been processed
+    setTimeout(() => {
+      isSelectingSuggestionRef.current = false;
+    }, 100);
   };
 
   const clearSuggestions = (field: 'cheque' | 'head' | 'notes') => {
@@ -311,29 +356,7 @@ export default function EntryForm({
     const normalizedDate = normalizeDateFormat(formData.date);
     const normalizedFormData = { ...formData, date: normalizedDate };
 
-    // Debug logging to verify cb_type
-    console.log('🔍 EntryForm - Submitting entry with cb_type:', normalizedFormData.cb_type);
-    console.log('🔍 EntryForm - selectedCBType prop:', selectedCBType);
-    console.log('🔍 EntryForm - Full formData:', normalizedFormData);
-
-    // Check for duplicate (all fields must match)
-    if (!editData) {
-      const isDuplicate = await db.checkDuplicate(
-        normalizedDate,
-        selectedType,
-        formData.amount,
-        formData.head_of_accounts,
-        formData.cheque_no,
-        formData.notes
-      );
-
-      if (isDuplicate) {
-        if (!confirm('An identical entry was created recently. Do you want to continue?')) {
-          return;
-        }
-      }
-    }
-
+    // Save immediately without duplicate check for faster entry
     onSave(selectedType, normalizedFormData, editData?.id);
   };
 
@@ -379,46 +402,35 @@ export default function EntryForm({
               value={formData.date}
               onChange={handleInputChange}
               onBlur={handleDateBlur}
-              onFocus={() => {
+              onFocus={(e) => {
                 // Clear all suggestions when date field is focused
                 setSuggestions({ cheque: [], head: [], notes: [] });
+                // Select all text for easy replacement
+                e.target.select();
               }}
               placeholder="dd/mm/yy or dd/mm/yyyy"
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
             />
           </div>
 
-          <div className="relative">
+          <div>
             <label className="block text-xs font-medium text-gray-700 mb-0.5">
               Cheque No <span className="text-red-500">*</span>
             </label>
             <input
+              ref={chequeInputRef}
               type="text"
               name="cheque_no"
               value={formData.cheque_no}
               onChange={handleInputChange}
-              onKeyDown={(e) => handleKeyDown(e, 'cheque')}
-              onFocus={() => handleFocus('cheque')}
-              onBlur={() => setTimeout(() => clearSuggestions('cheque'), 200)}
+              onFocus={(e) => {
+                // Clear all suggestions when cheque field is focused
+                setSuggestions({ cheque: [], head: [], notes: [] });
+                // Select all text for easy replacement
+                e.target.select();
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
             />
-            {suggestions.cheque.length > 0 && (
-              <div className="absolute z-10 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg max-h-32 overflow-y-auto">
-                {suggestions.cheque.map((suggestion, index) => (
-                  <div
-                    key={index}
-                    className={`px-3 py-1.5 cursor-pointer text-sm ${
-                      activeSuggestion.field === 'cheque' && activeSuggestion.index === index
-                        ? 'bg-blue-100'
-                        : 'hover:bg-gray-100'
-                    }`}
-                    onClick={() => selectSuggestion('cheque', suggestion.value)}
-                  >
-                    {suggestion.value}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -434,9 +446,11 @@ export default function EntryForm({
               name="amount"
               value={formData.amount}
               onChange={handleInputChange}
-              onFocus={() => {
+              onFocus={(e) => {
                 // Clear all suggestions when amount field is focused
                 setSuggestions({ cheque: [], head: [], notes: [] });
+                // Select all text for easy replacement
+                e.target.select();
               }}
               placeholder="0.00"
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm text-right"
@@ -448,16 +462,21 @@ export default function EntryForm({
               Head of Accounts <span className="text-red-500">*</span>
             </label>
             <input
+              ref={headInputRef}
               type="text"
               name="head_of_accounts"
               value={formData.head_of_accounts}
               onChange={handleInputChange}
               onKeyDown={(e) => handleKeyDown(e, 'head')}
-              onFocus={() => handleFocus('head')}
-              onBlur={() => setTimeout(() => clearSuggestions('head'), 200)}
+              onFocus={(e) => {
+                handleFocus('head');
+                // Select all text for easy replacement
+                e.target.select();
+              }}
+              onBlur={() => handleBlur('head')}
               className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
             />
-            {suggestions.head.length > 0 && (
+            {suggestions.head.length > 0 && !selectedFields.head && (
               <div className="absolute z-10 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg max-h-32 overflow-y-auto">
                 {suggestions.head.map((suggestion, index) => (
                   <div
@@ -481,16 +500,21 @@ export default function EntryForm({
         <div className="relative">
           <label className="block text-xs font-medium text-gray-700 mb-0.5">Notes <span className="text-red-500">*</span></label>
           <textarea
+            ref={notesInputRef}
             name="notes"
             value={formData.notes}
             onChange={handleInputChange}
             onKeyDown={(e) => handleKeyDown(e, 'notes')}
-            onFocus={() => handleFocus('notes')}
-            onBlur={() => setTimeout(() => clearSuggestions('notes'), 200)}
+            onFocus={(e) => {
+              handleFocus('notes');
+              // Select all text for easy replacement
+              e.target.select();
+            }}
+            onBlur={() => handleBlur('notes')}
             rows={2}
             className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm resize-none"
           />
-          {suggestions.notes.length > 0 && (
+          {suggestions.notes.length > 0 && !selectedFields.notes && (
             <div className="absolute z-10 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg max-h-32 overflow-y-auto">
               {suggestions.notes.map((suggestion, index) => (
                 <div
