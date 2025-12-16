@@ -25,7 +25,10 @@
       "Bash(netlify sites:list:*)",
       "Bash(netlify deploy:*)",
       "Bash(netlify env:set:*)",
-      "Bash(node -e:*)"
+      "Bash(node -e:*)",
+      "Bash(STOP_SMP_CASHBOOK.bat)",
+      "Bash(cmd /c \"D:\\Apps\\React_Cash Book\\STOP_SMP_CASHBOOK.bat\")",
+      "Bash(del \"D:\\Apps\\React_Cash Book\\smp-cashbook\\src\\hooks\\useEntries.ts\")"
     ]
   },
   "enableAllProjectMcpServers": true,

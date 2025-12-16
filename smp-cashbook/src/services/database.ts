@@ -76,6 +76,52 @@ export const db = {
     }
   },
 
+  // Get paginated entries (returns entries + pagination info)
+  async getPaginatedEntries(
+    financialYear?: string,
+    cbType?: 'aided' | 'unaided' | 'both',
+    limit?: number,
+    offset?: number
+  ): Promise<{ entries: CashEntry[]; pagination: { total: number; limit: number; offset: number } }> {
+    try {
+      const params = new URLSearchParams();
+      if (financialYear) params.append('fy', financialYear);
+      if (cbType && cbType !== 'both') params.append('cb_type', cbType);
+      if (limit) params.append('limit', limit.toString());
+      if (offset) params.append('offset', offset.toString());
+
+      const url = `${API_BASE_URL}/entries?${params.toString()}`;
+      const response = await fetch(url);
+      const data = await handleResponse<{ entries: CashEntry[]; pagination: { total: number; limit: number; offset: number } }>(response);
+      return data;
+    } catch (error) {
+      console.error('Failed to fetch paginated entries:', error);
+      throw error;
+    }
+  },
+
+  // Get recent entries (optimized for Entry page)
+  async getRecentEntries(
+    financialYear?: string,
+    cbType?: 'aided' | 'unaided' | 'both',
+    limit: number = 5
+  ): Promise<CashEntry[]> {
+    try {
+      const params = new URLSearchParams();
+      if (financialYear) params.append('fy', financialYear);
+      if (cbType && cbType !== 'both') params.append('cb_type', cbType);
+      params.append('limit', limit.toString());
+
+      const url = `${API_BASE_URL}/entries/recent?${params.toString()}`;
+      const response = await fetch(url);
+      const entries = await handleResponse<CashEntry[]>(response);
+      return entries;
+    } catch (error) {
+      console.error('Failed to fetch recent entries:', error);
+      throw error;
+    }
+  },
+
   // Get most recent entry date
   async getMostRecentDate(): Promise<string | null> {
     try {

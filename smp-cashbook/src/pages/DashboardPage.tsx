@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { CashEntry, CBType } from '../types';
 import { formatAmount, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
+import { useDashboardSummary, useAllEntries } from '../hooks/useCashEntries';
 
 interface DashboardPageProps {
   selectedFY: string;
@@ -10,49 +11,34 @@ interface DashboardPageProps {
   onNavigate?: (page: 'transactions' | 'ledgers') => void;
 }
 
-interface DashboardStats {
-  totalReceipts: number;
-  totalPayments: number;
-  totalReceiptAmount: number;
-  totalPaymentAmount: number;
-  closingBalance: number;
-  todayEntries: number;
-  thisWeekEntries: number;
-  thisMonthEntries: number;
-}
-
 export default function DashboardPage({ selectedFY, selectedCBType, onNavigate }: DashboardPageProps) {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalReceipts: 0,
-    totalPayments: 0,
-    totalReceiptAmount: 0,
-    totalPaymentAmount: 0,
-    closingBalance: 0,
-    todayEntries: 0,
-    thisWeekEntries: 0,
-    thisMonthEntries: 0,
-  });
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<CashEntry[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [selectedFY, selectedCBType]);
+  // React Query hooks - cached data fetching
+  const { data: dashboardData, isLoading: loadingSummary } = useDashboardSummary(selectedFY, selectedCBType);
+  const { data: entries = [], isLoading: loadingEntries } = useAllEntries(selectedFY, selectedCBType);
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      // Use optimized summary endpoint instead of fetching all entries
-      const { summary } = await db.getDashboardSummary(selectedFY, selectedCBType);
+  const loading = loadingSummary || loadingEntries;
 
-      // Calculate closing balance
-      const closingBalance = summary.totalReceipts - summary.totalPayments;
+  // Calculate stats from fetched data
+  const stats = (() => {
+    if (!dashboardData) {
+      return {
+        totalReceipts: 0,
+        totalPayments: 0,
+        totalReceiptAmount: 0,
+        totalPaymentAmount: 0,
+        closingBalance: 0,
+        todayEntries: 0,
+        thisWeekEntries: 0,
+        thisMonthEntries: 0,
+      };
+    }
 
-      // For time-based stats, we still need to fetch entries
-      // But we can optimize this in the future with additional API endpoints
-      const entries = await db.getAllEntries(selectedFY, selectedCBType);
+    const { summary } = dashboardData;
+    const closingBalance = summary.totalReceipts - summary.totalPayments;
 
       // Get today's date in dd/mm/yy format
       const today = new Date();
@@ -65,34 +51,29 @@ export default function DashboardPage({ selectedFY, selectedCBType, onNavigate }
       const weekStart = new Date(today);
       weekStart.setDate(today.getDate() - today.getDay() + 1);
 
-      // Count entries
-      const todayEntries = entries.filter(e => e.date === todayStr).length;
-      const thisWeekEntries = entries.filter(e => {
-        const [day, month, year] = e.date.split('/').map(Number);
-        const entryDate = new Date(2000 + year, month - 1, day);
-        return entryDate >= weekStart && entryDate <= today;
-      }).length;
-      const thisMonthEntries = entries.filter(e => {
-        const [, month, year] = e.date.split('/');
-        return month === mm && year === yy;
-      }).length;
+    // Count entries
+    const todayEntries = entries.filter(e => e.date === todayStr).length;
+    const thisWeekEntries = entries.filter(e => {
+      const [day, month, year] = e.date.split('/').map(Number);
+      const entryDate = new Date(2000 + year, month - 1, day);
+      return entryDate >= weekStart && entryDate <= today;
+    }).length;
+    const thisMonthEntries = entries.filter(e => {
+      const [, month, year] = e.date.split('/');
+      return month === mm && year === yy;
+    }).length;
 
-      setStats({
-        totalReceipts: summary.receiptCount,
-        totalPayments: summary.paymentCount,
-        totalReceiptAmount: summary.totalReceipts,
-        totalPaymentAmount: summary.totalPayments,
-        closingBalance,
-        todayEntries,
-        thisWeekEntries,
-        thisMonthEntries,
-      });
-    } catch (error) {
-      console.error('Error loading dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return {
+      totalReceipts: summary.receiptCount,
+      totalPayments: summary.paymentCount,
+      totalReceiptAmount: summary.totalReceipts,
+      totalPaymentAmount: summary.totalPayments,
+      closingBalance,
+      todayEntries,
+      thisWeekEntries,
+      thisMonthEntries,
+    };
+  })();
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {

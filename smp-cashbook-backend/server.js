@@ -152,9 +152,10 @@ app.get('/api/dashboard/summary', async (req, res) => {
 });
 
 // Get all entries sorted by date (oldest first), optionally filtered by FY and CB Type
+// Now supports pagination via limit and offset query params
 app.get('/api/entries', async (req, res) => {
   try {
-    const { fy, cb_type } = req.query;
+    const { fy, cb_type, limit, offset } = req.query;
 
     let query = `
       SELECT * FROM cash_entries
@@ -190,11 +191,78 @@ app.get('/api/entries', async (req, res) => {
         created_at ASC
     `;
 
+    // Add pagination if limit is provided
+    if (limit) {
+      query += ` LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit, 10));
+    }
+
+    if (offset) {
+      query += ` OFFSET $${params.length + 1}`;
+      params.push(parseInt(offset, 10));
+    }
+
     const result = await pool.query(query, params);
-    res.json(result.rows);
+
+    // If pagination is used, also get total count
+    if (limit || offset) {
+      let countQuery = 'SELECT COUNT(*) FROM cash_entries';
+      if (conditions.length > 0) {
+        countQuery += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      const countResult = await pool.query(countQuery, conditions.length > 0 ? params.slice(0, conditions.length) : []);
+      const total = parseInt(countResult.rows[0].count, 10);
+
+      res.json({
+        entries: result.rows,
+        pagination: {
+          total,
+          limit: parseInt(limit || result.rows.length, 10),
+          offset: parseInt(offset || 0, 10),
+        },
+      });
+    } else {
+      // Legacy response for backward compatibility
+      res.json(result.rows);
+    }
   } catch (error) {
     console.error('Error fetching entries:', error);
     res.status(500).json({ error: 'Failed to fetch entries', details: error.message });
+  }
+});
+
+// Get recent entries (optimized for Entry page)
+app.get('/api/entries/recent', async (req, res) => {
+  try {
+    const { fy, cb_type, limit = 5 } = req.query;
+
+    const params = [];
+    const conditions = [];
+
+    // Add FY filter if provided
+    if (fy) {
+      conditions.push(`financial_year = $${params.length + 1}`);
+      params.push(fy);
+    }
+
+    // Add CB Type filter if provided (and not 'both')
+    if (cb_type && cb_type !== 'both') {
+      conditions.push(`cb_type = $${params.length + 1}`);
+      params.push(cb_type);
+    }
+
+    let query = 'SELECT * FROM cash_entries';
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(' AND ')}`;
+    }
+    query += ` ORDER BY created_at DESC, id DESC LIMIT $${params.length + 1}`;
+    params.push(parseInt(limit, 10));
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching recent entries:', error);
+    res.status(500).json({ error: 'Failed to fetch recent entries', details: error.message });
   }
 });
 

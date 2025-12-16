@@ -4,6 +4,7 @@ import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
 import { getTodayDate, formatAmount, calculateClosingBalance, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
+import { useAllEntries, useRecentDate, useCreateEntry, useUpdateEntry, useDeleteEntry } from '../hooks/useCashEntries';
 
 interface EntryPageProps {
   selectedFY: string;
@@ -13,85 +14,67 @@ interface EntryPageProps {
 }
 
 export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSuccessMessage }: EntryPageProps) {
-  const [recentEntries, setRecentEntries] = useState<CashEntry[]>([]);
   const [defaultDate, setDefaultDate] = useState<string>(getTodayDate());
   const [editData, setEditData] = useState<{ id: string; formData: EntryFormData; type: EntryType } | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [formResetTrigger, setFormResetTrigger] = useState<number>(0);
 
-  // Load recent entries on mount and when FY or CB Type changes
+  // React Query hooks - optimized fetching with caching
+  const { data: recentEntriesData = [] } = useAllEntries(selectedFY, selectedCBType);
+  const { data: recentDate } = useRecentDate();
+
+  // Mutations with optimistic updates
+  const createEntryMutation = useCreateEntry();
+  const updateEntryMutation = useUpdateEntry();
+  const deleteEntryMutation = useDeleteEntry();
+
+  // Update default date when recent date is fetched
   useEffect(() => {
-    loadRecentEntries();
-    loadMostRecentDate();
-  }, [selectedFY, selectedCBType]);
-
-  const loadRecentEntries = async () => {
-    try {
-      // Fetch entries filtered by FY and CB Type
-      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
-
-      // Sort entries newest to oldest (for Entry page display)
-      const sortedEntries = allEntries.sort((a, b) => {
-        const [dayA, monthA, yearA] = a.date.split('/').map(Number);
-        const [dayB, monthB, yearB] = b.date.split('/').map(Number);
-        const dateA = new Date(2000 + yearA, monthA - 1, dayA);
-        const dateB = new Date(2000 + yearB, monthB - 1, dayB);
-        // Sort descending (newest first) - also use created_at as secondary sort
-        const dateCompare = dateB.getTime() - dateA.getTime();
-        if (dateCompare !== 0) return dateCompare;
-        // If same date, sort by created_at (most recent first)
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      });
-
-      // Force update by creating new array with all sorted entries
-      setRecentEntries(sortedEntries.map(entry => ({ ...entry })));
-    } catch (error) {
-      console.error('Error loading recent entries:', error);
-    }
-  };
-
-  const loadMostRecentDate = async () => {
-    const recentDate = await db.getMostRecentDate();
     if (recentDate) {
       setDefaultDate(recentDate);
     }
-  };
+  }, [recentDate]);
+
+  // Sort entries newest to oldest (for Entry page display)
+  const recentEntries = [...recentEntriesData].sort((a, b) => {
+    const [dayA, monthA, yearA] = a.date.split('/').map(Number);
+    const [dayB, monthB, yearB] = b.date.split('/').map(Number);
+    const dateA = new Date(2000 + yearA, monthA - 1, dayA);
+    const dateB = new Date(2000 + yearB, monthB - 1, dayB);
+    // Sort descending (newest first) - also use created_at as secondary sort
+    const dateCompare = dateB.getTime() - dateA.getTime();
+    if (dateCompare !== 0) return dateCompare;
+    // If same date, sort by created_at (most recent first)
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   const handleSave = async (type: EntryType, formData: EntryFormData, editId?: string) => {
     try {
       if (editId) {
-        // Update existing entry
-        await db.updateEntry(editId, formData);
+        // Update existing entry with optimistic update
+        await updateEntryMutation.mutateAsync({ id: editId, formData });
         showSuccessMessage('Entry updated successfully!');
-
-        // Reload entries and reset edit mode
-        await loadRecentEntries();
         setEditData(null);
       } else {
-        // Check for duplicates before creating new entry
-        const allEntries = await db.getAllEntries();
-        const amount = parseFloat(formData.amount);
+        // Check for duplicates using backend endpoint (optimized)
+        const isDuplicate = await db.checkDuplicate(
+          formData.date,
+          type,
+          formData.amount,
+          formData.head_of_accounts,
+          formData.cheque_no,
+          formData.notes
+        );
 
-        const duplicateEntry = allEntries.find(existing => {
-          return (
-            existing.date === formData.date &&
-            existing.type === type &&
-            existing.head_of_accounts === formData.head_of_accounts &&
-            Math.abs(existing.amount - amount) < 0.01 &&
-            existing.notes === formData.notes &&
-            existing.cheque_no === formData.cheque_no
-          );
-        });
-
-        if (duplicateEntry) {
+        if (isDuplicate) {
           const proceed = window.confirm(
-            `⚠️ Duplicate Entry Found!\n\nA similar entry already exists:\n` +
-            `Date: ${duplicateEntry.date}\n` +
-            `Type: ${duplicateEntry.type === 'receipt' ? 'Receipt' : 'Payment'}\n` +
-            `Cheque No: ${duplicateEntry.cheque_no || '-'}\n` +
-            `Amount: ${formatAmount(duplicateEntry.amount)}\n` +
-            `Head of Account: ${duplicateEntry.head_of_accounts}\n` +
-            `Notes: ${duplicateEntry.notes || '-'}\n\n` +
+            `⚠️ Duplicate Entry Found!\n\nA similar entry was recently created with:\n` +
+            `Date: ${formData.date}\n` +
+            `Type: ${type === 'receipt' ? 'Receipt' : 'Payment'}\n` +
+            `Cheque No: ${formData.cheque_no || '-'}\n` +
+            `Amount: ${formatAmount(parseFloat(formData.amount))}\n` +
+            `Head of Account: ${formData.head_of_accounts}\n` +
+            `Notes: ${formData.notes || '-'}\n\n` +
             `Do you want to create this entry anyway?`
           );
 
@@ -100,8 +83,8 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
           }
         }
 
-        // Create new entry
-        await db.createEntry(type, formData);
+        // Create new entry with optimistic update
+        await createEntryMutation.mutateAsync({ type, formData });
 
         // Update default date for next entry
         setDefaultDate(formData.date);
@@ -109,13 +92,10 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
         // Clear search query to show all entries
         setSearchQuery('');
 
-        // Reload entries immediately
-        await loadRecentEntries();
-
         // Trigger form reset (clear all fields except date)
         setFormResetTrigger(prev => prev + 1);
 
-        // Show success message after reload completes
+        // Show success message (React Query auto-updates the UI)
         showSuccessMessage(`${type === 'receipt' ? 'Receipt' : 'Payment'} saved successfully!`);
       }
     } catch (error) {
@@ -147,9 +127,9 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
   const handleDelete = async (id: string, head: string) => {
     if (confirm(`Are you sure you want to delete the entry for "${head}"?`)) {
       try {
-        await db.deleteEntry(id);
+        // Delete with optimistic update
+        await deleteEntryMutation.mutateAsync(id);
         showSuccessMessage('Entry deleted successfully!');
-        await loadRecentEntries();
       } catch (error) {
         console.error('Error deleting entry:', error);
         alert('Failed to delete entry. Please try again.');

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import EntryForm from '../components/EntryForm';
 import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
 import { formatAmount, calculateRunningBalance, getTodayDate, toProperCase } from '../utils/helpers';
-import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useAllEntries, useUpdateEntry, useDeleteEntry } from '../hooks/useCashEntries';
 
 interface LedgersPageProps {
   selectedFY: string;
@@ -20,14 +20,19 @@ interface LedgerSummary {
 }
 
 export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageProps) {
-  const [entries, setEntries] = useState<CashEntry[]>([]);
-  const [ledgers, setLedgers] = useState<LedgerSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedLedger, setSelectedLedger] = useState<LedgerSummary | null>(null);
   const [ledgerTransactions, setLedgerTransactions] = useState<CashEntry[]>([]);
   const [editData, setEditData] = useState<{ id: string; type: EntryType; formData: EntryFormData } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [sideBySideView, setSideBySideView] = useState<string | null>(null); // Stores ledger name for side-by-side view
+
+  // React Query hooks - cached data fetching
+  const { data: entries = [] } = useAllEntries(selectedFY, selectedCBType);
+
+  // Mutations with optimistic updates
+  const updateEntryMutation = useUpdateEntry();
+  const deleteEntryMutation = useDeleteEntry();
 
   // Parse date from dd/mm/yy format to Date object
   const parseDate = (dateStr: string): Date => {
@@ -36,23 +41,12 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
     return new Date(fullYear, month - 1, day);
   };
 
-  // Load all entries and compute ledgers
-  useEffect(() => {
-    loadEntries();
-  }, [selectedFY, selectedCBType]);
-
-  const loadEntries = async () => {
-    const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
-    setEntries(allEntries);
-    computeLedgers(allEntries);
-  };
-
-  const computeLedgers = (allEntries: CashEntry[]) => {
+  // Compute ledgers from entries (reactive to entries changes)
+  const ledgers = (() => {
     const ledgerMap = new Map<string, LedgerSummary>();
 
-    allEntries.forEach((entry) => {
+    entries.forEach((entry) => {
       const key = `${entry.type}-${entry.head_of_accounts}`;
-      // Ensure amount is a number
       const amount = typeof entry.amount === 'string' ? parseFloat(entry.amount) : entry.amount;
 
       if (ledgerMap.has(key)) {
@@ -69,13 +63,14 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
       }
     });
 
-    // Convert to array and sort alphabetically
-    const ledgerArray = Array.from(ledgerMap.values()).sort((a, b) =>
-      a.name.localeCompare(b.name)
-    );
+    return Array.from(ledgerMap.values()).sort((a, b) => {
+      if (a.type !== b.type) {
+        return a.type === 'receipt' ? -1 : 1;
+      }
+      return b.total - a.total;
+    });
+  })();
 
-    setLedgers(ledgerArray);
-  };
 
   const handleLedgerClick = (ledger: LedgerSummary) => {
     setSelectedLedger(ledger);
@@ -145,33 +140,24 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
   const handleSave = async (_type: EntryType, formData: EntryFormData, editId?: string) => {
     try {
       if (editId) {
-        await db.updateEntry(editId, formData);
+        // Use mutation with optimistic update
+        await updateEntryMutation.mutateAsync({ id: editId, formData });
         showSuccessMessage('Entry updated successfully!');
       }
 
-      // Reload all entries and recompute ledgers
-      const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
-      setEntries(allEntries);
-      computeLedgers(allEntries);
       handleCancel();
 
-      // Refresh ledger transactions if we're viewing a ledger
+      // React Query will automatically update entries and ledgers will recompute reactively
       if (selectedLedger) {
-        // Find the updated ledger data
-        const updatedLedger = allEntries.find(
+        // Refresh ledger transactions after mutation completes
+        const updatedLedgerEntries = entries.filter(
           (entry) => entry.head_of_accounts === selectedLedger.name && entry.type === selectedLedger.type
         );
-        if (updatedLedger) {
-          // Recalculate total for this specific ledger
-          const ledgerEntries = allEntries.filter(
-            (entry) => entry.head_of_accounts === selectedLedger.name && entry.type === selectedLedger.type
-          );
-          const total = ledgerEntries.reduce((sum, entry) => {
-            const amount = typeof entry.amount === 'string' ? parseFloat(entry.amount) : entry.amount;
-            return sum + amount;
-          }, 0);
-          handleLedgerClick({ ...selectedLedger, total, count: ledgerEntries.length });
-        }
+        const total = updatedLedgerEntries.reduce((sum, entry) => {
+          const amount = typeof entry.amount === 'string' ? parseFloat(entry.amount) : entry.amount;
+          return sum + amount;
+        }, 0);
+        handleLedgerClick({ ...selectedLedger, total, count: updatedLedgerEntries.length });
       }
     } catch (error) {
       console.error('Error saving entry:', error);
@@ -182,23 +168,21 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
   const handleDelete = async (id: string, head: string) => {
     if (confirm(`Are you sure you want to delete the entry for "${head}"?`)) {
       try {
-        await db.deleteEntry(id);
+        // Use mutation with optimistic update
+        await deleteEntryMutation.mutateAsync(id);
         showSuccessMessage('Entry deleted successfully!');
 
-        // Reload all entries and recompute ledgers
-        const allEntries = await db.getAllEntries(selectedFY);
-        setEntries(allEntries);
-        computeLedgers(allEntries);
+        // React Query will automatically update entries and ledgers will recompute reactively
 
         // Refresh ledger transactions if we're viewing a ledger
         if (selectedLedger) {
           // Recalculate total for this specific ledger
-          const ledgerEntries = allEntries.filter(
-            (entry) => entry.head_of_accounts === selectedLedger.name && entry.type === selectedLedger.type
+          const ledgerEntries = entries.filter(
+            (entry: CashEntry) => entry.head_of_accounts === selectedLedger.name && entry.type === selectedLedger.type
           );
 
           if (ledgerEntries.length > 0) {
-            const total = ledgerEntries.reduce((sum, entry) => {
+            const total = ledgerEntries.reduce((sum: number, entry: CashEntry) => {
               const amount = typeof entry.amount === 'string' ? parseFloat(entry.amount) : entry.amount;
               return sum + amount;
             }, 0);

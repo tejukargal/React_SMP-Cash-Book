@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getCurrentFinancialYear, generateFinancialYears, getFinancialYearDisplay } from '../utils/financialYear';
 import { db } from '../services/database';
 import type { CBType } from '../types';
+import { useDeleteAllEntries, useAllEntries } from '../hooks/useCashEntries';
 
 interface SettingsPageProps {
   onFinancialYearChange?: (fy: string) => void;
@@ -26,6 +27,10 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
   const [isRestoring, setIsRestoring] = useState<boolean>(false);
   const [restoreError, setRestoreError] = useState<string>('');
   const financialYears = generateFinancialYears(5, 2);
+
+  // React Query hooks
+  const deleteAllMutation = useDeleteAllEntries();
+  const { data: backupEntries = [] } = useAllEntries(undefined, localCBType);
 
   useEffect(() => {
     // Notify parent component about FY change
@@ -69,7 +74,8 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
     setDeleteError('');
 
     try {
-      const result = await db.deleteAllEntries(localCBType, selectedFY);
+      // Use mutation with automatic cache invalidation
+      const result = await deleteAllMutation.mutateAsync({ cbType: localCBType, financialYear: selectedFY });
       setShowDeleteConfirm(false);
       setDeletePassword('');
 
@@ -92,8 +98,8 @@ export default function SettingsPage({ onFinancialYearChange, onCBTypeChange, se
   const handleBackup = async () => {
     setIsBackingUp(true);
     try {
-      // Fetch all entries for the selected CB type
-      const entries = await db.getAllEntries(undefined, localCBType);
+      // Use cached entries from React Query
+      const entries = backupEntries;
 
       // Create backup object with metadata
       const backup = {

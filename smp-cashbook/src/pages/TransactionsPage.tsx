@@ -2,10 +2,10 @@ import { useState, useEffect } from 'react';
 import EntryForm from '../components/EntryForm';
 import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
 import { formatAmount, calculateClosingBalance, getTodayDate, toProperCase } from '../utils/helpers';
-import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { useAllEntries, useUpdateEntry, useDeleteEntry } from '../hooks/useCashEntries';
 
 interface TransactionsPageProps {
   selectedFY: string;
@@ -14,7 +14,6 @@ interface TransactionsPageProps {
 }
 
 export default function TransactionsPage({ selectedFY, selectedCBType, onNavigate }: TransactionsPageProps) {
-  const [entries, setEntries] = useState<CashEntry[]>([]);
   const [editData, setEditData] = useState<{ id: string; type: EntryType; formData: EntryFormData } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -24,15 +23,12 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [entriesPerPage] = useState<number>(100);
 
-  // Load all entries on mount and when FY or CB Type changes
-  useEffect(() => {
-    loadEntries();
-  }, [selectedFY, selectedCBType]);
+  // React Query hooks - cached data fetching
+  const { data: entries = [] } = useAllEntries(selectedFY, selectedCBType);
 
-  const loadEntries = async () => {
-    const allEntries = await db.getAllEntries(selectedFY, selectedCBType);
-    setEntries(allEntries);
-  };
+  // Mutations with optimistic updates
+  const updateEntryMutation = useUpdateEntry();
+  const deleteEntryMutation = useDeleteEntry();
 
   const handleEdit = (entry: CashEntry) => {
     const formData: EntryFormData = {
@@ -51,11 +47,11 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   const handleSave = async (_type: EntryType, formData: EntryFormData, editId?: string) => {
     try {
       if (editId) {
-        await db.updateEntry(editId, formData);
+        // Update with optimistic update
+        await updateEntryMutation.mutateAsync({ id: editId, formData });
         showSuccessMessage('Entry updated successfully!');
       }
 
-      await loadEntries();
       handleCancel();
     } catch (error) {
       console.error('Error saving entry:', error);
@@ -66,9 +62,9 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   const handleDelete = async (id: string, head: string) => {
     if (confirm(`Are you sure you want to delete the entry for "${head}"?`)) {
       try {
-        await db.deleteEntry(id);
+        // Delete with optimistic update
+        await deleteEntryMutation.mutateAsync(id);
         showSuccessMessage('Entry deleted successfully!');
-        await loadEntries();
       } catch (error) {
         console.error('Error deleting entry:', error);
         alert('Failed to delete entry. Please try again.');

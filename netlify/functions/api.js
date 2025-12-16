@@ -97,6 +97,33 @@ exports.handler = async (event, context) => {
       return sendResponse(200, { status: 'ok', message: 'SMP Cash Book API is running' });
     }
 
+    // ===== GET RECENT ENTRIES (must come before general entries route) =====
+    if (method === 'GET' && route === 'entries/recent') {
+      const { fy, cb_type, limit = 5 } = queryParams;
+      const params = [];
+      const conditions = [];
+
+      if (fy) {
+        conditions.push(`financial_year = $${params.length + 1}`);
+        params.push(fy);
+      }
+
+      if (cb_type && cb_type !== 'both') {
+        conditions.push(`cb_type = $${params.length + 1}`);
+        params.push(cb_type);
+      }
+
+      let query = 'SELECT * FROM cash_entries';
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
+      }
+      query += ` ORDER BY created_at DESC, id DESC LIMIT $${params.length + 1}`;
+      params.push(parseInt(limit, 10));
+
+      const result = await pool.query(query, params);
+      return sendResponse(200, result.rows);
+    }
+
     // ===== GET RECENT DATE (must come before general entries route) =====
     if (method === 'GET' && route === 'entries/recent-date') {
       const result = await pool.query(
@@ -284,9 +311,9 @@ exports.handler = async (event, context) => {
       });
     }
 
-    // ===== GET ALL ENTRIES =====
+    // ===== GET ALL ENTRIES (with pagination support) =====
     if (method === 'GET' && route === 'entries') {
-      const { fy, cb_type } = queryParams;
+      const { fy, cb_type, limit, offset } = queryParams;
       let query = `SELECT * FROM cash_entries`;
       const params = [];
       const conditions = [];
@@ -315,8 +342,40 @@ exports.handler = async (event, context) => {
           created_at ASC
       `;
 
+      // Add pagination if limit is provided
+      if (limit) {
+        query += ` LIMIT $${params.length + 1}`;
+        params.push(parseInt(limit, 10));
+      }
+
+      if (offset) {
+        query += ` OFFSET $${params.length + 1}`;
+        params.push(parseInt(offset, 10));
+      }
+
       const result = await pool.query(query, params);
-      return sendResponse(200, result.rows);
+
+      // If pagination is used, also get total count
+      if (limit || offset) {
+        let countQuery = 'SELECT COUNT(*) FROM cash_entries';
+        if (conditions.length > 0) {
+          countQuery += ` WHERE ${conditions.join(' AND ')}`;
+        }
+        const countResult = await pool.query(countQuery, conditions.length > 0 ? params.slice(0, conditions.length) : []);
+        const total = parseInt(countResult.rows[0].count, 10);
+
+        return sendResponse(200, {
+          entries: result.rows,
+          pagination: {
+            total,
+            limit: parseInt(limit || result.rows.length, 10),
+            offset: parseInt(offset || 0, 10),
+          },
+        });
+      } else {
+        // Legacy response for backward compatibility
+        return sendResponse(200, result.rows);
+      }
     }
 
     // ===== GET SUGGESTIONS =====
