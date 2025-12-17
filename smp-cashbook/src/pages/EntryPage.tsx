@@ -206,9 +206,61 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
       );
     });
 
-  // For display, show 5 entries when forms are shown, 30 when collapsed
-  const displayLimit = showForms ? 5 : 30;
-  const displayEntries = searchQuery ? filteredEntries : filteredEntries.slice(0, displayLimit);
+  // For display logic
+  let displayEntries: CashEntry[];
+
+  if (searchQuery) {
+    // When searching, show all matching entries
+    displayEntries = filteredEntries;
+  } else if (showForms) {
+    // When forms are shown, show last 5 entries
+    displayEntries = filteredEntries.slice(0, 5);
+  } else {
+    // When forms are collapsed (full screen), show entries from most recent date + 2 previous dates
+    // Find the most recently created/updated entry
+    const mostRecentEntry = [...recentEntriesData].sort((a, b) => {
+      const timeA = Math.max(
+        new Date(a.created_at).getTime(),
+        a.updated_at ? new Date(a.updated_at).getTime() : 0
+      );
+      const timeB = Math.max(
+        new Date(b.created_at).getTime(),
+        b.updated_at ? new Date(b.updated_at).getTime() : 0
+      );
+      return timeB - timeA;
+    })[0];
+
+    if (mostRecentEntry) {
+      const recentDate = mostRecentEntry.date;
+
+      // Get all unique dates and sort them chronologically (oldest first)
+      const allDates = [...new Set(recentEntriesData.map(e => e.date))].sort((a, b) => {
+        const [dayA, monthA, yearA] = a.split('/').map(Number);
+        const [dayB, monthB, yearB] = b.split('/').map(Number);
+        const dateA = new Date(2000 + yearA, monthA - 1, dayA);
+        const dateB = new Date(2000 + yearB, monthB - 1, dayB);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      // Find the index of the recent date
+      const recentDateIndex = allDates.indexOf(recentDate);
+
+      // Get the recent date + 2 previous dates (3 dates total)
+      const startIndex = Math.max(0, recentDateIndex - 2);
+      const datesToShow = allDates.slice(startIndex, recentDateIndex + 1);
+
+      // Filter entries to show only those dates
+      displayEntries = filteredEntries.filter(entry => datesToShow.includes(entry.date));
+    } else {
+      displayEntries = [];
+    }
+  }
+
+  const displayLimit = searchQuery
+    ? displayEntries.length
+    : showForms
+      ? 5
+      : displayEntries.length;
 
   // Group entries by date for CB Report 2 format (when forms are collapsed)
   const groupEntriesByDate = () => {
@@ -337,7 +389,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
         <div className="bg-gray-100 border-b border-gray-300 px-3 py-1.5 flex justify-between items-center">
           <div>
             <h2 className="text-sm font-semibold text-gray-800">
-              Recent Transactions (Last {displayLimit})
+              Recent Transactions {!showForms ? '(Recent 3 Dates)' : `(Last ${displayLimit})`}
               {!showForms && <span className="ml-2 text-xs font-normal text-blue-600">CB Report 2 Format</span>}
             </h2>
             <p className="text-xs text-gray-600">FY: {getFinancialYearDisplay(selectedFY)}</p>
