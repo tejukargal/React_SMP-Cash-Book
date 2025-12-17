@@ -7,6 +7,30 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useAllEntries, useUpdateEntry, useDeleteEntry } from '../hooks/useCashEntries';
 
+// Fee order for sorting
+const FEE_ORDER = [
+  'Adm Fee',
+  'Tution Fee',
+  'RR Fee',
+  'Ass Fee',
+  'Sports Fee',
+  'Mag Fee',
+  'ID Fee',
+  'Lib Fee',
+  'Lab Fee',
+  'DVP Fee',
+  'SWF Fee',
+  'TWF Fee',
+  'Nss Fee',
+  'Fine Fee',
+];
+
+// Helper function to get fee order index
+const getFeeOrderIndex = (headOfAccount: string): number => {
+  const index = FEE_ORDER.indexOf(headOfAccount);
+  return index === -1 ? 999 : index; // Non-fee items go to end
+};
+
 interface TransactionsPageProps {
   selectedFY: string;
   selectedCBType: CBType;
@@ -126,6 +150,22 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
         }
         return acc;
       }, {} as Record<string, { receipts: CashEntry[]; payments: CashEntry[] }>);
+
+      // Sort receipts and payments within each date by fee order
+      Object.values(groupedByDateForExport).forEach((group) => {
+        group.receipts.sort((a, b) => {
+          const feeOrderA = getFeeOrderIndex(a.head_of_accounts);
+          const feeOrderB = getFeeOrderIndex(b.head_of_accounts);
+          if (feeOrderA !== feeOrderB) return feeOrderA - feeOrderB;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+        group.payments.sort((a, b) => {
+          const feeOrderA = getFeeOrderIndex(a.head_of_accounts);
+          const feeOrderB = getFeeOrderIndex(b.head_of_accounts);
+          if (feeOrderA !== feeOrderB) return feeOrderA - feeOrderB;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        });
+      });
 
       const tableData: any[] = [];
       let runningBalance = 0;
@@ -338,7 +378,16 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
       const [dayB, monthB, yearB] = b.date.split('/').map(Number);
       const dateA = new Date(2000 + yearA, monthA - 1, dayA);
       const dateB = new Date(2000 + yearB, monthB - 1, dayB);
-      return dateA.getTime() - dateB.getTime();
+      const dateCompare = dateA.getTime() - dateB.getTime();
+      if (dateCompare !== 0) return dateCompare;
+
+      // If same date, sort by fee order
+      const feeOrderA = getFeeOrderIndex(a.head_of_accounts);
+      const feeOrderB = getFeeOrderIndex(b.head_of_accounts);
+      if (feeOrderA !== feeOrderB) return feeOrderA - feeOrderB;
+
+      // If same fee order, sort by created_at
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
 
   // Reset to page 1 when filters change
@@ -383,6 +432,22 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
     }
     return acc;
   }, {} as Record<string, { receipts: CashEntry[]; payments: CashEntry[] }>);
+
+  // Sort receipts and payments within each date by fee order
+  Object.values(groupedByDate).forEach((group) => {
+    group.receipts.sort((a, b) => {
+      const feeOrderA = getFeeOrderIndex(a.head_of_accounts);
+      const feeOrderB = getFeeOrderIndex(b.head_of_accounts);
+      if (feeOrderA !== feeOrderB) return feeOrderA - feeOrderB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+    group.payments.sort((a, b) => {
+      const feeOrderA = getFeeOrderIndex(a.head_of_accounts);
+      const feeOrderB = getFeeOrderIndex(b.head_of_accounts);
+      if (feeOrderA !== feeOrderB) return feeOrderA - feeOrderB;
+      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    });
+  });
 
   const sortedDates = Object.keys(groupedByDate).sort((a, b) => {
     // Sort dates in ascending order (oldest first)
