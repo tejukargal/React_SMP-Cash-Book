@@ -43,18 +43,18 @@ export interface ReceiptEntry {
   cb_type?: 'aided' | 'unaided';
 }
 
-// Fee head of accounts mapping
+// Fee head of accounts mapping - order matters for display
 const FEE_HEADS = [
   'Adm',
   'Tution',
-  'Lib',
   'RR',
+  'Ass',
   'Sports',
-  'Lab',
-  'DVP',
   'Mag',
   'ID',
-  'Ass',
+  'Lib',
+  'Lab',
+  'DVP',
   'SWF',
   'TWF',
   'NSS',
