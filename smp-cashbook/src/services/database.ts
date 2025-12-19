@@ -135,12 +135,17 @@ export const db = {
   },
 
   // Get autocomplete suggestions for head of accounts
-  async getHeadOfAccountsSuggestions(query: string): Promise<AutocompleteOption[]> {
+  async getHeadOfAccountsSuggestions(query: string, type?: EntryType, financialYear?: string): Promise<AutocompleteOption[]> {
     if (!query || query.length < 4) return [];
 
     try {
+      const params = new URLSearchParams();
+      params.append('query', query);
+      if (type) params.append('type', type);
+      if (financialYear) params.append('fy', financialYear);
+
       const response = await fetch(
-        `${API_BASE_URL}/suggestions/head?query=${encodeURIComponent(query)}`
+        `${API_BASE_URL}/suggestions/head?${params.toString()}`
       );
       const suggestions = await handleResponse<AutocompleteOption[]>(response);
       return suggestions;
@@ -157,18 +162,44 @@ export const db = {
   },
 
   // Get autocomplete suggestions for notes
-  async getNotesSuggestions(query: string): Promise<AutocompleteOption[]> {
+  async getNotesSuggestions(query: string, type?: EntryType, financialYear?: string): Promise<AutocompleteOption[]> {
     if (!query || query.length < 4) return [];
 
     try {
+      const params = new URLSearchParams();
+      params.append('query', query);
+      if (type) params.append('type', type);
+      if (financialYear) params.append('fy', financialYear);
+
       const response = await fetch(
-        `${API_BASE_URL}/suggestions/notes?query=${encodeURIComponent(query)}`
+        `${API_BASE_URL}/suggestions/notes?${params.toString()}`
       );
       const suggestions = await handleResponse<AutocompleteOption[]>(response);
       return suggestions;
     } catch (error) {
       console.error('Failed to fetch notes suggestions:', error);
       return [];
+    }
+  },
+
+  // Get most recent notes for a specific Head of Account
+  async getNotesForHead(headOfAccount: string, type?: EntryType, financialYear?: string): Promise<string | null> {
+    if (!headOfAccount || headOfAccount.length < 2) return null;
+
+    try {
+      const params = new URLSearchParams();
+      params.append('head', headOfAccount);
+      if (type) params.append('type', type);
+      if (financialYear) params.append('fy', financialYear);
+
+      const response = await fetch(
+        `${API_BASE_URL}/suggestions/notes-for-head?${params.toString()}`
+      );
+      const data = await handleResponse<{ notes: string | null }>(response);
+      return data.notes;
+    } catch (error) {
+      console.error('Failed to fetch notes for head:', error);
+      return null;
     }
   },
 

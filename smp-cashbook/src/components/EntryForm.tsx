@@ -8,6 +8,7 @@ interface EntryFormProps {
   selectedType: EntryType;
   initialDate: string;
   selectedCBType: CBType;
+  selectedFY: string;
   editData?: { id: string; formData: EntryFormData } | null;
   onSave: (type: EntryType, formData: EntryFormData, editId?: string) => void;
   onCancel: () => void;
@@ -19,6 +20,7 @@ export default function EntryForm({
   selectedType,
   initialDate,
   selectedCBType,
+  selectedFY,
   editData,
   onSave,
   onCancel,
@@ -62,6 +64,20 @@ export default function EntryForm({
     notes: boolean;
   }>({ cheque: false, head: false, notes: false });
 
+  // Track if notes were auto-populated from head of accounts
+  const [isNotesAutoPopulated, setIsNotesAutoPopulated] = useState(false);
+
+  // Cache for suggestions to avoid repeated API calls
+  const suggestionsCache = useRef<{
+    head: Map<string, AutocompleteOption[]>;
+    notes: Map<string, AutocompleteOption[]>;
+    notesForHead: Map<string, string | null>;
+  }>({
+    head: new Map(),
+    notes: new Map(),
+    notesForHead: new Map(),
+  });
+
   const [isValid, setIsValid] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
   const amountInputRef = useRef<HTMLInputElement>(null);
@@ -69,7 +85,6 @@ export default function EntryForm({
   const headInputRef = useRef<HTMLInputElement>(null);
   const notesInputRef = useRef<HTMLTextAreaElement>(null);
   const isSelectingSuggestionRef = useRef(false);
-  const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load edit data if editing
   useEffect(() => {
@@ -97,15 +112,6 @@ export default function EntryForm({
       dateInputRef.current?.focus();
     }
   }, [autoFocus]);
-
-  // Cleanup debounce timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceTimeoutRef.current) {
-        clearTimeout(debounceTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Update cb_type when selectedCBType changes (unless editing)
   useEffect(() => {
@@ -138,6 +144,7 @@ export default function EntryForm({
       // Clear suggestions and selection state to allow new suggestions
       setSuggestions({ cheque: [], head: [], notes: [] });
       setSelectedFields({ cheque: false, head: false, notes: false });
+      setIsNotesAutoPopulated(false); // Clear auto-populated state
 
       // Highlight all fields except amount for easy replacement
       setTimeout(() => {
@@ -170,12 +177,7 @@ export default function EntryForm({
       return;
     }
 
-    // Clear any existing debounce timeout
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-
-    // Fetch autocomplete suggestions only if not previously selected or field is cleared
+    // Fetch autocomplete suggestions - instant, no debounce
     // Note: Cheque No autocomplete is disabled as per requirements
     if (name === 'cheque_no') {
       // Always clear suggestions for cheque_no field
@@ -184,31 +186,68 @@ export default function EntryForm({
       }
       setSuggestions(prev => ({ ...prev, cheque: [] }));
     } else if (name === 'head_of_accounts') {
+      // If head of accounts is being changed and notes were auto-populated, clear notes
+      if (isNotesAutoPopulated && value !== formData.head_of_accounts) {
+        setFormData(prev => ({ ...prev, notes: '' }));
+        setIsNotesAutoPopulated(false);
+        setSelectedFields(prev => ({ ...prev, notes: false }));
+      }
+
       if (value.length === 0) {
-        // Field cleared - reset selection state
+        // Field cleared - reset selection state and clear auto-populated notes
         setSelectedFields(prev => ({ ...prev, head: false }));
         setSuggestions(prev => ({ ...prev, head: [] }));
-      } else if (value.length >= 4 && !selectedFields.head) {
-        // Debounce the API call for faster perceived performance
-        debounceTimeoutRef.current = setTimeout(async () => {
-          const suggestions = await db.getHeadOfAccountsSuggestions(processedValue);
-          setSuggestions(prev => ({ ...prev, head: suggestions.slice(0, 1) })); // Show only 1 suggestion
-        }, 150);
+        if (isNotesAutoPopulated) {
+          setFormData(prev => ({ ...prev, notes: '' }));
+          setIsNotesAutoPopulated(false);
+          setSelectedFields(prev => ({ ...prev, notes: false }));
+        }
+      } else if (value.length >= 4) {
+        // Instant suggestions - no debounce
+        const cacheKey = `${processedValue}-${selectedType}-${selectedFY}`;
+        const cached = suggestionsCache.current.head.get(cacheKey);
+
+        if (cached) {
+          // Use cached result instantly
+          setSuggestions(prev => ({ ...prev, head: cached.slice(0, 1) }));
+        } else {
+          // Fetch from API and cache
+          (async () => {
+            const suggestions = await db.getHeadOfAccountsSuggestions(processedValue, selectedType, selectedFY);
+            suggestionsCache.current.head.set(cacheKey, suggestions);
+            setSuggestions(prev => ({ ...prev, head: suggestions.slice(0, 1) }));
+          })();
+        }
       } else if (value.length < 4) {
         // Clear suggestions if less than 4 characters
         setSuggestions(prev => ({ ...prev, head: [] }));
       }
     } else if (name === 'notes') {
+      // Clear auto-populated state when user starts typing
+      if (isNotesAutoPopulated) {
+        setIsNotesAutoPopulated(false);
+      }
+
       if (value.length === 0) {
         // Field cleared - reset selection state
         setSelectedFields(prev => ({ ...prev, notes: false }));
         setSuggestions(prev => ({ ...prev, notes: [] }));
       } else if (value.length >= 4 && !selectedFields.notes) {
-        // Debounce the API call for faster perceived performance
-        debounceTimeoutRef.current = setTimeout(async () => {
-          const suggestions = await db.getNotesSuggestions(processedValue);
-          setSuggestions(prev => ({ ...prev, notes: suggestions.slice(0, 1) })); // Show only 1 suggestion
-        }, 150);
+        // Instant suggestions - no debounce
+        const cacheKey = `${processedValue}-${selectedType}-${selectedFY}`;
+        const cached = suggestionsCache.current.notes.get(cacheKey);
+
+        if (cached) {
+          // Use cached result instantly
+          setSuggestions(prev => ({ ...prev, notes: cached.slice(0, 1) }));
+        } else {
+          // Fetch from API and cache
+          (async () => {
+            const suggestions = await db.getNotesSuggestions(processedValue, selectedType, selectedFY);
+            suggestionsCache.current.notes.set(cacheKey, suggestions);
+            setSuggestions(prev => ({ ...prev, notes: suggestions.slice(0, 1) }));
+          })();
+        }
       } else if (value.length < 4) {
         // Clear suggestions if less than 4 characters
         setSuggestions(prev => ({ ...prev, notes: [] }));
@@ -240,6 +279,8 @@ export default function EntryForm({
       setSuggestions(prev => ({ ...prev, head: [], notes: [] }));
     } else if (field === 'head') {
       setSuggestions(prev => ({ ...prev, cheque: [], notes: [] }));
+      // Reset the "selected" state to allow suggestions to show again
+      setSelectedFields(prev => ({ ...prev, head: false }));
     } else if (field === 'notes') {
       setSuggestions(prev => ({ ...prev, cheque: [], head: [] }));
     }
@@ -247,7 +288,7 @@ export default function EntryForm({
   };
 
   const handleBlur = (field: 'cheque' | 'head' | 'notes') => {
-    // When user leaves the field, mark it as "selected" to prevent suggestions from reappearing
+    // Use a very short timeout to allow click events on suggestions to fire first
     setTimeout(() => {
       clearSuggestions(field);
       // Mark field as selected if it has content to prevent re-showing suggestions
@@ -255,8 +296,13 @@ export default function EntryForm({
       const hasContent = formData[fieldName].trim().length > 0;
       if (hasContent) {
         setSelectedFields(prev => ({ ...prev, [field]: true }));
+
+        // If head of accounts field, fetch and populate notes immediately
+        if (field === 'head') {
+          fetchAndPopulateNotes(formData.head_of_accounts);
+        }
       }
-    }, 200);
+    }, 150); // Reduced from 200ms to 150ms
   };
 
   const handleKeyDown = (
@@ -298,7 +344,7 @@ export default function EntryForm({
     }
   };
 
-  const selectSuggestion = (field: 'cheque' | 'head' | 'notes', value: string) => {
+  const selectSuggestion = async (field: 'cheque' | 'head' | 'notes', value: string) => {
     const fieldName =
       field === 'cheque'
         ? 'cheque_no'
@@ -315,13 +361,60 @@ export default function EntryForm({
     // Clear suggestions immediately
     clearSuggestions(field);
 
-    // Update form data
-    setFormData(prev => ({ ...prev, [fieldName]: value }));
+    // If head of accounts was selected and notes were auto-populated, clear notes first
+    if (field === 'head' && isNotesAutoPopulated) {
+      setFormData(prev => ({ ...prev, [fieldName]: value, notes: '' }));
+      setIsNotesAutoPopulated(false);
+      setSelectedFields(prev => ({ ...prev, notes: false }));
+    } else {
+      // Update form data
+      setFormData(prev => ({ ...prev, [fieldName]: value }));
+    }
+
+    // If head of accounts was selected, auto-populate notes
+    if (field === 'head') {
+      await fetchAndPopulateNotes(value);
+    }
 
     // Reset the flag after all events have been processed
     setTimeout(() => {
       isSelectingSuggestionRef.current = false;
     }, 100);
+  };
+
+  // Fetch and auto-populate notes based on head of accounts
+  const fetchAndPopulateNotes = async (headOfAccount: string) => {
+    if (!headOfAccount || headOfAccount.trim().length < 2) return;
+
+    // Don't auto-populate if notes field has user-entered content (not auto-populated)
+    if (formData.notes && formData.notes.trim().length > 0 && !isNotesAutoPopulated) return;
+
+    try {
+      // Check cache first for instant response
+      const cacheKey = `${headOfAccount}-${selectedType}-${selectedFY}`;
+      let notes = suggestionsCache.current.notesForHead.get(cacheKey);
+
+      if (notes === undefined) {
+        // Not in cache, fetch from API
+        notes = await db.getNotesForHead(headOfAccount, selectedType, selectedFY);
+        suggestionsCache.current.notesForHead.set(cacheKey, notes);
+      }
+
+      if (notes && notes.trim().length > 0) {
+        setFormData(prev => ({ ...prev, notes }));
+        setIsNotesAutoPopulated(true);
+
+        // Auto-select the notes text for easy replacement - immediate focus
+        setTimeout(() => {
+          if (notesInputRef.current && document.activeElement !== notesInputRef.current) {
+            notesInputRef.current.select();
+            notesInputRef.current.focus();
+          }
+        }, 30); // Reduced to 30ms for faster response
+      }
+    } catch (error) {
+      console.error('Failed to fetch notes for head:', error);
+    }
   };
 
   const clearSuggestions = (field: 'cheque' | 'head' | 'notes') => {
@@ -342,6 +435,7 @@ export default function EntryForm({
     // Clear suggestions and selection state
     setSuggestions({ cheque: [], head: [], notes: [] });
     setSelectedFields({ cheque: false, head: false, notes: false });
+    setIsNotesAutoPopulated(false); // Clear auto-populated state
     // Focus date input (only for autoFocus form)
     if (autoFocus) {
       dateInputRef.current?.focus();
@@ -498,7 +592,12 @@ export default function EntryForm({
 
         {/* Row 3: Notes */}
         <div className="relative">
-          <label className="block text-xs font-medium text-gray-700 mb-0.5">Notes <span className="text-red-500">*</span></label>
+          <label className="block text-xs font-medium text-gray-700 mb-0.5">
+            Notes <span className="text-red-500">*</span>
+            {isNotesAutoPopulated && (
+              <span className="ml-2 text-xs text-blue-600 font-normal">(Auto-filled - Edit or Accept)</span>
+            )}
+          </label>
           <textarea
             ref={notesInputRef}
             name="notes"
@@ -512,7 +611,11 @@ export default function EntryForm({
             }}
             onBlur={() => handleBlur('notes')}
             rows={2}
-            className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm resize-none"
+            className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-1 text-sm resize-none ${
+              isNotesAutoPopulated
+                ? 'border-blue-400 bg-blue-50 focus:ring-blue-500'
+                : 'border-gray-300 focus:ring-blue-400'
+            }`}
           />
           {suggestions.notes.length > 0 && !selectedFields.notes && (
             <div className="absolute z-10 w-full mt-0.5 bg-white border border-gray-300 rounded shadow-lg max-h-32 overflow-y-auto">

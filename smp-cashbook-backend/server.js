@@ -282,19 +282,44 @@ app.get('/api/entries/recent-date', async (req, res) => {
 // Get autocomplete suggestions for head of accounts
 app.get('/api/suggestions/head', async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, type, fy } = req.query;
+    console.log('🔍 HEAD SUGGESTIONS REQUEST - query:', query, 'type:', type, 'fy:', fy);
+
     if (!query || query.length < 4) {
       return res.json([]);
     }
 
+    // Build WHERE conditions
+    const conditions = ['LOWER(head_of_accounts) LIKE LOWER($1)'];
+    const params = [`%${query}%`];
+
+    // Filter by entry type (receipt or payment)
+    if (type && (type === 'receipt' || type === 'payment')) {
+      conditions.push(`type = $${params.length + 1}`);
+      params.push(type);
+      console.log('🔍 Filtering by TYPE:', type);
+    }
+
+    // Filter by financial year
+    if (fy) {
+      conditions.push(`financial_year = $${params.length + 1}`);
+      params.push(fy);
+      console.log('🔍 Filtering by FY:', fy);
+    }
+
+    const whereClause = conditions.join(' AND ');
+    console.log('🔍 SQL WHERE:', whereClause);
+    console.log('🔍 SQL PARAMS:', params);
+
     const result = await pool.query(
       `SELECT head_of_accounts as value
        FROM cash_entries
-       WHERE LOWER(head_of_accounts) LIKE LOWER($1)
+       WHERE ${whereClause}
        ORDER BY created_at DESC
        LIMIT 1`,
-      [`%${query}%`]
+      params
     );
+    console.log('🔍 RESULTS FOUND:', result.rows.length);
     res.json(result.rows.map(row => ({ value: row.value, count: 0 })));
   } catch (error) {
     console.error('Error fetching head suggestions:', error);
@@ -329,23 +354,97 @@ app.get('/api/suggestions/cheque', async (req, res) => {
 // Get autocomplete suggestions for notes
 app.get('/api/suggestions/notes', async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, type, fy } = req.query;
+    console.log('🔍 NOTES SUGGESTIONS REQUEST - query:', query, 'type:', type, 'fy:', fy);
+
     if (!query || query.length < 4) {
       return res.json([]);
     }
 
+    // Build WHERE conditions
+    const conditions = ['notes IS NOT NULL', 'LOWER(notes) LIKE LOWER($1)'];
+    const params = [`%${query}%`];
+
+    // Filter by entry type (receipt or payment)
+    if (type && (type === 'receipt' || type === 'payment')) {
+      conditions.push(`type = $${params.length + 1}`);
+      params.push(type);
+      console.log('🔍 Filtering by TYPE:', type);
+    }
+
+    // Filter by financial year
+    if (fy) {
+      conditions.push(`financial_year = $${params.length + 1}`);
+      params.push(fy);
+      console.log('🔍 Filtering by FY:', fy);
+    }
+
+    const whereClause = conditions.join(' AND ');
+    console.log('🔍 SQL WHERE:', whereClause);
+    console.log('🔍 SQL PARAMS:', params);
+
     const result = await pool.query(
       `SELECT notes as value
        FROM cash_entries
-       WHERE notes IS NOT NULL AND LOWER(notes) LIKE LOWER($1)
+       WHERE ${whereClause}
        ORDER BY created_at DESC
        LIMIT 1`,
-      [`%${query}%`]
+      params
     );
+    console.log('🔍 RESULTS FOUND:', result.rows.length);
     res.json(result.rows.map(row => ({ value: row.value, count: 0 })));
   } catch (error) {
     console.error('Error fetching notes suggestions:', error);
     res.status(500).json({ error: 'Failed to fetch suggestions', details: error.message });
+  }
+});
+
+// Get most recent notes for a specific Head of Account
+app.get('/api/suggestions/notes-for-head', async (req, res) => {
+  try {
+    const { head, type, fy } = req.query;
+    console.log('🔍 NOTES FOR HEAD REQUEST - head:', head, 'type:', type, 'fy:', fy);
+
+    if (!head || head.length < 2) {
+      return res.json({ notes: null });
+    }
+
+    // Build WHERE conditions
+    const conditions = ['notes IS NOT NULL', 'LOWER(head_of_accounts) = LOWER($1)'];
+    const params = [head];
+
+    // Filter by entry type (receipt or payment)
+    if (type && (type === 'receipt' || type === 'payment')) {
+      conditions.push(`type = $${params.length + 1}`);
+      params.push(type);
+      console.log('🔍 Filtering by TYPE:', type);
+    }
+
+    // Filter by financial year
+    if (fy) {
+      conditions.push(`financial_year = $${params.length + 1}`);
+      params.push(fy);
+      console.log('🔍 Filtering by FY:', fy);
+    }
+
+    const whereClause = conditions.join(' AND ');
+    console.log('🔍 SQL WHERE:', whereClause);
+    console.log('🔍 SQL PARAMS:', params);
+
+    const result = await pool.query(
+      `SELECT notes
+       FROM cash_entries
+       WHERE ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      params
+    );
+    console.log('🔍 RESULTS FOUND:', result.rows.length);
+
+    res.json(result.rows.length > 0 ? { notes: result.rows[0].notes } : { notes: null });
+  } catch (error) {
+    console.error('Error fetching notes for head:', error);
+    res.status(500).json({ error: 'Failed to fetch notes', details: error.message });
   }
 });
 

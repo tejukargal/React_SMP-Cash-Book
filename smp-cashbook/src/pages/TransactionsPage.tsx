@@ -515,6 +515,7 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
             selectedType={editData.type}
             initialDate={getTodayDate()}
             selectedCBType={selectedCBType}
+            selectedFY={selectedFY}
             editData={{ id: editData.id, formData: editData.formData }}
             onSave={handleSave}
             onCancel={handleCancel}

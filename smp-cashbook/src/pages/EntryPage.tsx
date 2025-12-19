@@ -1,7 +1,7 @@
 import { useState, useEffect, type JSX } from 'react';
 import EntryForm from '../components/EntryForm';
 import type { CashEntry, EntryType, EntryFormData, CBType } from '../types';
-import { getTodayDate, formatAmount, calculateClosingBalance, toProperCase } from '../utils/helpers';
+import { getTodayDate, formatAmount, toProperCase } from '../utils/helpers';
 import { db } from '../services/database';
 import { getFinancialYearDisplay } from '../utils/financialYear';
 import { useAllEntries, useRecentDate, useCreateEntry, useUpdateEntry, useDeleteEntry } from '../hooks/useCashEntries';
@@ -213,8 +213,8 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
     // When searching, show all matching entries
     displayEntries = filteredEntries;
   } else if (showForms) {
-    // When forms are shown, show last 5 entries
-    displayEntries = filteredEntries.slice(0, 5);
+    // When forms are shown, show only entries from the current date (defaultDate)
+    displayEntries = filteredEntries.filter(entry => entry.date === defaultDate);
   } else {
     // When forms are collapsed (full screen), show entries from most recent date + 2 previous dates
     // Find the most recently created/updated entry
@@ -256,13 +256,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
     }
   }
 
-  const displayLimit = searchQuery
-    ? displayEntries.length
-    : showForms
-      ? 5
-      : displayEntries.length;
-
-  // Group entries by date for CB Report 2 format (when forms are collapsed)
+  // Group entries by date for CB Report 2 format
   const groupEntriesByDate = () => {
     const grouped: { [date: string]: { date: string; receipts: CashEntry[]; payments: CashEntry[] } } = {};
 
@@ -360,6 +354,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
               selectedType="receipt"
               initialDate={defaultDate}
               selectedCBType={selectedCBType}
+              selectedFY={selectedFY}
               editData={editData?.type === 'receipt' ? editData : null}
               onSave={handleSave}
               onCancel={handleCancelEdit}
@@ -374,6 +369,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
               selectedType="payment"
               initialDate={defaultDate}
               selectedCBType={selectedCBType}
+              selectedFY={selectedFY}
               editData={editData?.type === 'payment' ? editData : null}
               onSave={handleSave}
               onCancel={handleCancelEdit}
@@ -389,8 +385,8 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
         <div className="bg-gray-100 border-b border-gray-300 px-3 py-1.5 flex justify-between items-center">
           <div>
             <h2 className="text-sm font-semibold text-gray-800">
-              Recent Transactions {!showForms ? '(Recent 3 Dates)' : `(Last ${displayLimit})`}
-              {!showForms && <span className="ml-2 text-xs font-normal text-blue-600">CB Report 2 Format</span>}
+              Recent Transactions {showForms ? `(Date: ${defaultDate})` : '(Recent 3 Dates)'}
+              <span className="ml-2 text-xs font-normal text-blue-600">CB Report 2 Format</span>
             </h2>
             <p className="text-xs text-gray-600">FY: {getFinancialYearDisplay(selectedFY)}</p>
           </div>
@@ -419,14 +415,14 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
           {displayEntries.length === 0 ? (
             <div className="flex items-center justify-center h-full text-gray-500">
               <div className="text-center">
-                <p className="text-sm font-medium">{searchQuery ? 'No matching entries' : 'No entries yet'}</p>
+                <p className="text-sm font-medium">{searchQuery ? 'No matching entries' : showForms ? `No entries for ${defaultDate}` : 'No entries yet'}</p>
                 <p className="text-xs mt-1">
                   {searchQuery ? 'Try a different search term' : 'Click "+ Add Entries" above to add your first entry'}
                 </p>
               </div>
             </div>
-          ) : !showForms ? (
-            /* CB Report 2 Format - when forms are collapsed */
+          ) : (
+            /* CB Report 2 Format - always use this format */
             <table className="w-full border-collapse">
               <thead className="bg-gray-200 sticky top-0 z-10">
                 <tr>
@@ -654,110 +650,6 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
                   return rows;
                 })()}
-              </tbody>
-            </table>
-          ) : (
-            /* Regular Format - when forms are shown */
-            <table className="w-full border-collapse">
-              <thead className="bg-gray-200 sticky top-0 z-10">
-                <tr>
-                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Date
-                  </th>
-                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Type
-                  </th>
-                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Cheque No
-                  </th>
-                  <th className="text-right px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Amount
-                  </th>
-                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Head of Accounts
-                  </th>
-                  <th className="text-left px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Notes
-                  </th>
-                  <th className="text-right px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300">
-                    Closing Balance
-                  </th>
-                  <th className="text-center px-3 py-1.5 text-sm font-semibold text-gray-700 border-b border-gray-300 w-24">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {displayEntries.map((entry) => {
-                  // Find the index in ALL chronological entries for correct closing balance
-                  const chronoIndex = allChronologicalEntries.findIndex(e => e.id === entry.id);
-                  const closingBalance = calculateClosingBalance(allChronologicalEntries, chronoIndex);
-                  const rowBgColor =
-                    entry.type === 'receipt' ? 'bg-green-50' : 'bg-red-50';
-
-                  return (
-                    <tr
-                      key={entry.id}
-                      className={`${rowBgColor} hover:opacity-80 transition-opacity duration-150 border-b border-gray-200`}
-                      style={{ height: '30px' }}
-                    >
-                      <td className="px-3 py-1 text-sm text-gray-800">{entry.date}</td>
-                      <td className="px-3 py-1 text-sm">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${
-                            entry.type === 'receipt'
-                              ? 'bg-green-200 text-green-800'
-                              : 'bg-red-200 text-red-800'
-                          }`}
-                        >
-                          {entry.type === 'receipt' ? 'R' : 'P'}
-                        </span>
-                      </td>
-                      <td className="px-3 py-1 text-sm text-gray-700">
-                        {entry.cheque_no || '-'}
-                      </td>
-                      <td className="px-3 py-1 text-sm text-gray-800 text-right font-medium">
-                        {formatAmount(entry.amount)}
-                      </td>
-                      <td className="px-3 py-1 text-sm text-gray-800">
-                        {entry.head_of_accounts}
-                      </td>
-                      <td className="px-3 py-1 text-sm text-gray-600 truncate max-w-xs">
-                        {entry.notes || '-'}
-                      </td>
-                      <td
-                        className={`px-3 py-1 text-sm text-right font-semibold ${
-                          closingBalance !== null
-                            ? closingBalance >= 0
-                              ? 'text-green-700'
-                              : 'text-red-700'
-                            : 'text-gray-400'
-                        }`}
-                      >
-                        {closingBalance !== null ? formatAmount(closingBalance) : '-'}
-                      </td>
-                      <td className="px-3 py-1 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => handleEdit(entry)}
-                            className="text-blue-600 hover:text-blue-800 text-xs font-medium transition-colors duration-150"
-                            title="Edit"
-                          >
-                            Edit
-                          </button>
-                          <span className="text-gray-300 text-xs">|</span>
-                          <button
-                            onClick={() => handleDelete(entry.id, entry.head_of_accounts)}
-                            className="text-red-600 hover:text-red-800 text-xs font-medium transition-colors duration-150"
-                            title="Delete"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
               </tbody>
             </table>
           )}

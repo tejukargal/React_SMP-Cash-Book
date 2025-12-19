@@ -380,16 +380,34 @@ exports.handler = async (event, context) => {
 
     // ===== GET SUGGESTIONS =====
     if (method === 'GET' && route === 'suggestions/head') {
-      const { query } = queryParams;
+      const { query, type, fy } = queryParams;
       if (!query || query.length < 4) return sendResponse(200, []);
+
+      // Build WHERE conditions
+      const conditions = ['LOWER(head_of_accounts) LIKE LOWER($1)'];
+      const params = [`%${query}%`];
+
+      // Filter by entry type (receipt or payment)
+      if (type && (type === 'receipt' || type === 'payment')) {
+        conditions.push(`type = $${params.length + 1}`);
+        params.push(type);
+      }
+
+      // Filter by financial year
+      if (fy) {
+        conditions.push(`financial_year = $${params.length + 1}`);
+        params.push(fy);
+      }
+
+      const whereClause = conditions.join(' AND ');
 
       const result = await pool.query(
         `SELECT head_of_accounts as value
          FROM cash_entries
-         WHERE LOWER(head_of_accounts) LIKE LOWER($1)
+         WHERE ${whereClause}
          ORDER BY created_at DESC
          LIMIT 1`,
-        [`%${query}%`]
+        params
       );
       return sendResponse(200, result.rows.map(row => ({ value: row.value, count: 0 })));
     }
@@ -411,18 +429,71 @@ exports.handler = async (event, context) => {
     }
 
     if (method === 'GET' && route === 'suggestions/notes') {
-      const { query } = queryParams;
+      const { query, type, fy } = queryParams;
       if (!query || query.length < 4) return sendResponse(200, []);
+
+      // Build WHERE conditions
+      const conditions = ['notes IS NOT NULL', 'LOWER(notes) LIKE LOWER($1)'];
+      const params = [`%${query}%`];
+
+      // Filter by entry type (receipt or payment)
+      if (type && (type === 'receipt' || type === 'payment')) {
+        conditions.push(`type = $${params.length + 1}`);
+        params.push(type);
+      }
+
+      // Filter by financial year
+      if (fy) {
+        conditions.push(`financial_year = $${params.length + 1}`);
+        params.push(fy);
+      }
+
+      const whereClause = conditions.join(' AND ');
 
       const result = await pool.query(
         `SELECT notes as value
          FROM cash_entries
-         WHERE notes IS NOT NULL AND LOWER(notes) LIKE LOWER($1)
+         WHERE ${whereClause}
          ORDER BY created_at DESC
          LIMIT 1`,
-        [`%${query}%`]
+        params
       );
       return sendResponse(200, result.rows.map(row => ({ value: row.value, count: 0 })));
+    }
+
+    // ===== GET NOTES FOR HEAD OF ACCOUNT =====
+    if (method === 'GET' && route === 'suggestions/notes-for-head') {
+      const { head, type, fy } = queryParams;
+      if (!head || head.length < 2) return sendResponse(200, { notes: null });
+
+      // Build WHERE conditions
+      const conditions = ['notes IS NOT NULL', 'LOWER(head_of_accounts) = LOWER($1)'];
+      const params = [head];
+
+      // Filter by entry type (receipt or payment)
+      if (type && (type === 'receipt' || type === 'payment')) {
+        conditions.push(`type = $${params.length + 1}`);
+        params.push(type);
+      }
+
+      // Filter by financial year
+      if (fy) {
+        conditions.push(`financial_year = $${params.length + 1}`);
+        params.push(fy);
+      }
+
+      const whereClause = conditions.join(' AND ');
+
+      const result = await pool.query(
+        `SELECT notes
+         FROM cash_entries
+         WHERE ${whereClause}
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        params
+      );
+
+      return sendResponse(200, result.rows.length > 0 ? { notes: result.rows[0].notes } : { notes: null });
     }
 
     // ===== CREATE NEW ENTRY =====

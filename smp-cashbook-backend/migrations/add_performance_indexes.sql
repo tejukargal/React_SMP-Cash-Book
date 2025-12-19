@@ -32,3 +32,15 @@ ON cash_entries(head_of_accounts, type);
 -- Composite index for common query pattern (fy, cb_type, type)
 CREATE INDEX IF NOT EXISTS idx_cash_entries_fy_cbtype_type
 ON cash_entries(financial_year, cb_type, type);
+
+-- Index on created_at for recent entries queries (DESC ordering)
+CREATE INDEX IF NOT EXISTS idx_cash_entries_created_at_desc
+ON cash_entries(created_at DESC);
+
+-- Composite index for autocomplete suggestions on head_of_accounts (with type, fy, and created_at)
+CREATE INDEX IF NOT EXISTS idx_cash_entries_head_suggestions
+ON cash_entries(head_of_accounts, type, financial_year, created_at DESC);
+
+-- Composite index for autocomplete suggestions on notes (with type, fy, and created_at)
+CREATE INDEX IF NOT EXISTS idx_cash_entries_notes_suggestions
+ON cash_entries(notes, type, financial_year, created_at DESC) WHERE notes IS NOT NULL;
