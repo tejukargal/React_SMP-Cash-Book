@@ -423,36 +423,50 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
             </div>
           ) : (
             /* CB Report 2 Format - always use this format */
-            <table className="w-full border-collapse">
+            <table className="w-full border-collapse table-fixed">
+              <colgroup>
+                {/* Receipt Columns */}
+                <col style={{ width: '6%' }} /> {/* R.Date */}
+                <col style={{ width: '12%' }} /> {/* R.Heads */}
+                <col style={{ width: '20%' }} /> {/* R.Notes */}
+                <col style={{ width: '8.5%' }} /> {/* R.Amount */}
+                {/* Payment Columns */}
+                <col style={{ width: '6%' }} /> {/* P.Date */}
+                <col style={{ width: '12%' }} /> {/* P.Heads */}
+                <col style={{ width: '20%' }} /> {/* P.Notes */}
+                <col style={{ width: '8.5%' }} /> {/* P.Amount */}
+                {/* Actions Column */}
+                <col style={{ width: '7%' }} /> {/* Actions */}
+              </colgroup>
               <thead className="bg-gray-200 sticky top-0 z-10">
                 <tr>
                   {/* Receipt Columns */}
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
                     R.Date
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
                     R.Heads
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
                     R.Notes
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-green-100">
                     R.Amount
                   </th>
                   {/* Payment Columns */}
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
                     P.Date
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
                     P.Heads
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
                     P.Notes
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
+                  <th className="px-2 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-red-100">
                     P.Amount
                   </th>
-                  <th className="px-3 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-blue-100 w-20">
+                  <th className="px-0.5 py-2 text-xs font-semibold text-gray-700 border border-gray-300 bg-blue-100">
                     Actions
                   </th>
                 </tr>
@@ -471,19 +485,19 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
                     if (groupIndex > 0 || (groupIndex === 0 && runningBalance !== 0)) {
                       rows.push(
                         <tr key={`by-opening-${groupIndex}`} className="bg-white">
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                          <td className="px-3 py-1.5 text-xs text-blue-600 font-medium border border-gray-300 bg-green-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                          <td className="px-2 py-1.5 text-xs text-blue-600 font-medium border border-gray-300 bg-green-50">
                             By Opening Bal
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-blue-600 text-right font-medium border border-gray-300 bg-green-50">
+                          <td className="px-2 py-1.5 text-xs text-blue-600 text-right font-medium border border-gray-300 bg-green-50">
                             {formatAmount(runningBalance)}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
-                          <td className="px-3 py-1.5 text-xs border border-gray-300 bg-gray-50"></td>
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                          <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                          <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                          <td className="px-0.5 py-1.5 text-xs border border-gray-300 bg-gray-50"></td>
                         </tr>
                       );
                     }
@@ -496,32 +510,32 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
                       rows.push(
                         <tr key={`${groupIndex}-${i}`} className="hover:bg-gray-50">
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
                             {receipt?.date || ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50 truncate" title={receipt?.head_of_accounts || ''}>
                             {receipt?.head_of_accounts || ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50 truncate" title={receipt?.notes || ''}>
                             {receipt?.notes || ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50">
                             {receipt ? formatAmount(receipt.amount) : ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
                             {payment?.date || ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50 truncate" title={payment?.head_of_accounts || ''}>
                             {payment?.head_of_accounts || ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50 truncate" title={payment?.notes || ''}>
                             {payment?.notes || ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50">
+                          <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50">
                             {payment ? formatAmount(payment.amount) : ''}
                           </td>
-                          <td className="px-3 py-1.5 text-xs border border-gray-300 bg-white">
-                            <div className="flex items-center justify-center gap-1">
+                          <td className="px-0.5 py-1.5 text-xs border border-gray-300 bg-white">
+                            <div className="flex items-center justify-center gap-0.5">
                               {receipt && (
                                 <>
                                   <button
@@ -543,7 +557,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
                               )}
                               {payment && (
                                 <>
-                                  {receipt && <span className="mx-1 text-gray-400">•</span>}
+                                  {receipt && <span className="text-gray-400">•</span>}
                                   <button
                                     onClick={() => handleEdit(payment)}
                                     className="text-blue-600 hover:text-blue-800 font-medium"
@@ -575,75 +589,75 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
                     runningBalance += dateReceipts - datePayments;
                     rows.push(
                       <tr key={`total-${groupIndex}`} className="bg-gray-200">
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
                           Total
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
                           {formatAmount(totalReceipts)}
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300">
                           {group.date}
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 font-semibold border border-gray-300">
                           Total
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-bold border border-gray-300">
                           {formatAmount(datePayments)}
                         </td>
-                        <td className="px-3 py-1.5 text-xs border border-gray-300 bg-gray-200"></td>
+                        <td className="px-0.5 py-1.5 text-xs border border-gray-300 bg-gray-200"></td>
                       </tr>
                     );
 
                     // Closing balance rows
                     rows.push(
                       <tr key={`closing-1-${groupIndex}`} className="bg-white">
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 font-medium border border-gray-300 bg-red-50">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 font-medium border border-gray-300 bg-red-50">
                           Closing Bal
                         </td>
-                        <td className="px-3 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
+                        <td className="px-2 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
                           {formatAmount(runningBalance)}
                         </td>
-                        <td className="px-3 py-1.5 text-xs border border-gray-300 bg-white"></td>
+                        <td className="px-0.5 py-1.5 text-xs border border-gray-300 bg-white"></td>
                       </tr>
                     );
 
                     rows.push(
                       <tr key={`closing-2-${groupIndex}`} className="bg-white">
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-red-600 text-right font-bold border border-gray-300 bg-red-50">
                           {formatAmount(datePayments + runningBalance)}
                         </td>
-                        <td className="px-3 py-1.5 text-xs border border-gray-300 bg-white"></td>
+                        <td className="px-0.5 py-1.5 text-xs border border-gray-300 bg-white"></td>
                       </tr>
                     );
 
                     // Empty row for spacing
                     rows.push(
                       <tr key={`space-${groupIndex}`} className="bg-white">
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
-                        <td className="px-3 py-1.5 text-xs border border-gray-300 bg-white"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-green-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-600 border border-gray-300 bg-red-50"></td>
+                        <td className="px-2 py-1.5 text-xs text-gray-800 text-right font-medium border border-gray-300 bg-red-50"></td>
+                        <td className="px-0.5 py-1.5 text-xs border border-gray-300 bg-white"></td>
                       </tr>
                     );
                   });

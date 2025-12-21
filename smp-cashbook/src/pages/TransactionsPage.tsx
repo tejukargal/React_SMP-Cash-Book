@@ -43,7 +43,7 @@ export default function TransactionsPage({ selectedFY, selectedCBType, onNavigat
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterType, setFilterType] = useState<'all' | 'receipt' | 'payment'>('all');
   const [splitView, setSplitView] = useState<boolean>(false);
-  const [cbReport2View, setCbReport2View] = useState<boolean>(false);
+  const [cbReport2View, setCbReport2View] = useState<boolean>(true);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [entriesPerPage] = useState<number>(100);
 

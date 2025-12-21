@@ -26,6 +26,9 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
   const [editData, setEditData] = useState<{ id: string; type: EntryType; formData: EntryFormData } | null>(null);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [sideBySideView, setSideBySideView] = useState<string | null>(null); // Stores ledger name for side-by-side view
+  const [comparisonMode, setComparisonMode] = useState<boolean>(false); // Enable comparison mode
+  const [selectedReceiptLedger, setSelectedReceiptLedger] = useState<string>(''); // Selected receipt ledger for comparison
+  const [selectedPaymentLedger, setSelectedPaymentLedger] = useState<string>(''); // Selected payment ledger for comparison
 
   // React Query hooks - cached data fetching
   const { data: entries = [] } = useAllEntries(selectedFY, selectedCBType);
@@ -107,6 +110,9 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
     setLedgerTransactions([]);
     setEditData(null);
     setSideBySideView(null);
+    setComparisonMode(false);
+    setSelectedReceiptLedger('');
+    setSelectedPaymentLedger('');
   };
 
   const handleSideBySideView = (ledgerName: string) => {
@@ -121,6 +127,28 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
     const hasReceipt = filteredLedgersList.some(l => l.name === ledgerName && l.type === 'receipt');
     const hasPayment = filteredLedgersList.some(l => l.name === ledgerName && l.type === 'payment');
     return hasReceipt && hasPayment;
+  };
+
+  // Enter comparison mode
+  const handleEnterComparisonMode = () => {
+    setComparisonMode(true);
+    setSelectedReceiptLedger('');
+    setSelectedPaymentLedger('');
+  };
+
+  // Exit comparison mode
+  const handleExitComparisonMode = () => {
+    setComparisonMode(false);
+    setSelectedReceiptLedger('');
+    setSelectedPaymentLedger('');
+  };
+
+  // View custom comparison
+  const handleViewCustomComparison = () => {
+    if (selectedReceiptLedger && selectedPaymentLedger) {
+      setSideBySideView(`${selectedReceiptLedger}|${selectedPaymentLedger}`);
+      setComparisonMode(false);
+    }
   };
 
   const handleEdit = (entry: CashEntry) => {
@@ -463,14 +491,20 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
 
   // Render side-by-side view
   if (sideBySideView) {
+    // Check if it's a custom comparison (contains pipe separator)
+    const isCustomComparison = sideBySideView.includes('|');
+    const [receiptLedgerName, paymentLedgerName] = isCustomComparison
+      ? sideBySideView.split('|')
+      : [sideBySideView, sideBySideView];
+
     const receiptTransactions = entries
-      .filter((entry) => entry.head_of_accounts === sideBySideView && entry.type === 'receipt')
+      .filter((entry) => entry.head_of_accounts === receiptLedgerName && entry.type === 'receipt')
       .sort((a, b) => {
         return parseDate(a.date).getTime() - parseDate(b.date).getTime();
       });
 
     const paymentTransactions = entries
-      .filter((entry) => entry.head_of_accounts === sideBySideView && entry.type === 'payment')
+      .filter((entry) => entry.head_of_accounts === paymentLedgerName && entry.type === 'payment')
       .sort((a, b) => {
         return parseDate(a.date).getTime() - parseDate(b.date).getTime();
       });
@@ -505,13 +539,23 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
             </button>
             <div className="flex gap-2">
               <button
-                onClick={() => exportSideBySideToCSV(receiptTransactions, paymentTransactions, sideBySideView)}
+                onClick={() => exportSideBySideToCSV(
+                  receiptTransactions,
+                  paymentTransactions,
+                  isCustomComparison ? `${receiptLedgerName}_vs_${paymentLedgerName}` : sideBySideView
+                )}
                 className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors"
               >
                 Export CSV
               </button>
               <button
-                onClick={() => exportSideBySideToPDF(receiptTransactions, paymentTransactions, sideBySideView, receiptTotal, paymentTotal)}
+                onClick={() => exportSideBySideToPDF(
+                  receiptTransactions,
+                  paymentTransactions,
+                  isCustomComparison ? `${receiptLedgerName} vs ${paymentLedgerName}` : sideBySideView,
+                  receiptTotal,
+                  paymentTotal
+                )}
                 className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 transition-colors"
               >
                 Export PDF
@@ -519,7 +563,11 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
             </div>
           </div>
           <div>
-            <h2 className="text-base font-bold text-gray-800">{sideBySideView}</h2>
+            <h2 className="text-base font-bold text-gray-800">
+              {isCustomComparison
+                ? `Comparison: ${receiptLedgerName} vs ${paymentLedgerName}`
+                : sideBySideView}
+            </h2>
             <p className="text-xs text-gray-600">
               Side by Side View • FY: {getFinancialYearDisplay(selectedFY)}
             </p>
@@ -532,7 +580,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
           <div className="flex-1 bg-white shadow-sm rounded-lg flex flex-col min-h-0">
             <div className="bg-green-100 border-b-2 border-green-300 px-3 py-1.5">
               <h3 className="text-sm font-semibold text-green-800">
-                Receipts ({receiptTransactions.length})
+                {receiptLedgerName} - Receipts ({receiptTransactions.length})
               </h3>
               <p className="text-xs text-green-700">
                 Total: {formatAmount(receiptTotal)}
@@ -589,7 +637,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
           <div className="flex-1 bg-white shadow-sm rounded-lg flex flex-col min-h-0">
             <div className="bg-red-100 border-b-2 border-red-300 px-3 py-1.5">
               <h3 className="text-sm font-semibold text-red-800">
-                Payments ({paymentTransactions.length})
+                {paymentLedgerName} - Payments ({paymentTransactions.length})
               </h3>
               <p className="text-xs text-red-700">
                 Total: {formatAmount(paymentTotal)}
@@ -690,22 +738,54 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
               />
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={exportLedgerSummaryToCSV}
-                className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors"
-              >
-                Export CSV
-              </button>
-              <button
-                onClick={exportLedgerSummaryToPDF}
-                className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 transition-colors"
-              >
-                Export PDF
-              </button>
+              {!comparisonMode ? (
+                <>
+                  <button
+                    onClick={handleEnterComparisonMode}
+                    className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    Compare Different Ledgers
+                  </button>
+                  <button
+                    onClick={exportLedgerSummaryToCSV}
+                    className="px-3 py-1 bg-green-600 text-white rounded text-xs font-medium hover:bg-green-700 transition-colors"
+                  >
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={exportLedgerSummaryToPDF}
+                    className="px-3 py-1 bg-red-600 text-white rounded text-xs font-medium hover:bg-red-700 transition-colors"
+                  >
+                    Export PDF
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={handleViewCustomComparison}
+                    disabled={!selectedReceiptLedger || !selectedPaymentLedger}
+                    className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    View Comparison
+                  </button>
+                  <button
+                    onClick={handleExitComparisonMode}
+                    className="px-3 py-1 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
             </div>
           </div>
           <div className="mt-1 text-xs text-gray-600">
-            FY: {getFinancialYearDisplay(selectedFY)}
+            {comparisonMode ? (
+              <span className="text-blue-600 font-medium">
+                Select one Receipt ledger and one Payment ledger to compare
+              </span>
+            ) : (
+              `FY: ${getFinancialYearDisplay(selectedFY)}`
+            )}
           </div>
         </div>
 
@@ -733,9 +813,19 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                   {receiptLedgers.map((ledger, index) => (
                     <div key={index} className="px-3 py-2 hover:bg-green-50 transition-colors">
                       <div className="flex justify-between items-start gap-2">
+                        {comparisonMode && (
+                          <input
+                            type="radio"
+                            name="receiptLedgerSelection"
+                            checked={selectedReceiptLedger === ledger.name}
+                            onChange={() => setSelectedReceiptLedger(ledger.name)}
+                            className="mt-1 cursor-pointer"
+                          />
+                        )}
                         <button
-                          onClick={() => handleLedgerClick(ledger)}
+                          onClick={() => !comparisonMode && handleLedgerClick(ledger)}
                           className="flex-1 text-left"
+                          disabled={comparisonMode}
                         >
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
@@ -743,7 +833,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                                 <p className="text-sm font-medium text-gray-800">
                                   {ledger.name}
                                 </p>
-                                {ledgerExistsInBoth(ledger.name, filteredLedgers) && (
+                                {!comparisonMode && ledgerExistsInBoth(ledger.name, filteredLedgers) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -794,9 +884,19 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                   {paymentLedgers.map((ledger, index) => (
                     <div key={index} className="px-3 py-2 hover:bg-red-50 transition-colors">
                       <div className="flex justify-between items-start gap-2">
+                        {comparisonMode && (
+                          <input
+                            type="radio"
+                            name="paymentLedgerSelection"
+                            checked={selectedPaymentLedger === ledger.name}
+                            onChange={() => setSelectedPaymentLedger(ledger.name)}
+                            className="mt-1 cursor-pointer"
+                          />
+                        )}
                         <button
-                          onClick={() => handleLedgerClick(ledger)}
+                          onClick={() => !comparisonMode && handleLedgerClick(ledger)}
                           className="flex-1 text-left"
+                          disabled={comparisonMode}
                         >
                           <div className="flex justify-between items-start">
                             <div className="flex-1">
@@ -804,7 +904,7 @@ export default function LedgersPage({ selectedFY, selectedCBType }: LedgersPageP
                                 <p className="text-sm font-medium text-gray-800">
                                   {ledger.name}
                                 </p>
-                                {ledgerExistsInBoth(ledger.name, filteredLedgers) && (
+                                {!comparisonMode && ledgerExistsInBoth(ledger.name, filteredLedgers) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
