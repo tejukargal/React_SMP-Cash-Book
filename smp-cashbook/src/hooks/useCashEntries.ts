@@ -129,7 +129,32 @@ export function useCreateEntry() {
       });
 
       // Return context with previous data for rollback
-      return { previousEntries, previousDashboard };
+      return { previousEntries, previousDashboard, tempId: tempEntry.id };
+    },
+
+    onSuccess: (newEntry, _variables, context) => {
+      // Replace temporary entry with actual server response
+      if (newEntry && context?.tempId) {
+        queryClient.setQueriesData({ queryKey: ['entries'] }, (old: any) => {
+          if (Array.isArray(old)) {
+            return old.map((entry: CashEntry) =>
+              entry.id === context.tempId ? newEntry : entry
+            );
+          }
+          if (old?.entries && Array.isArray(old.entries)) {
+            return {
+              ...old,
+              entries: old.entries.map((entry: CashEntry) =>
+                entry.id === context.tempId ? newEntry : entry
+              ),
+            };
+          }
+          return old;
+        });
+      }
+
+      // Invalidate dashboard for summary updates
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
 
     onError: (_error, _variables, context) => {
@@ -145,12 +170,7 @@ export function useCreateEntry() {
         });
       }
       console.error('Failed to create entry:', _error);
-    },
-
-    onSettled: () => {
-      // Refetch in background to sync with server (but UI already updated)
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      alert('Failed to create entry. Please try again.');
     },
   });
 }
@@ -217,6 +237,31 @@ export function useUpdateEntry() {
       return { previousEntries, previousDashboard };
     },
 
+    onSuccess: (updatedEntry, { id }) => {
+      // Update cache with actual server response (no refetch needed)
+      if (updatedEntry) {
+        queryClient.setQueriesData({ queryKey: ['entries'] }, (old: any) => {
+          if (Array.isArray(old)) {
+            return old.map((entry: CashEntry) =>
+              entry.id === id ? updatedEntry : entry
+            );
+          }
+          if (old?.entries && Array.isArray(old.entries)) {
+            return {
+              ...old,
+              entries: old.entries.map((entry: CashEntry) =>
+                entry.id === id ? updatedEntry : entry
+              ),
+            };
+          }
+          return old;
+        });
+      }
+
+      // Invalidate dashboard for summary updates
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+
     onError: (_error, _variables, context) => {
       // Rollback on error
       if (context?.previousEntries) {
@@ -230,12 +275,7 @@ export function useUpdateEntry() {
         });
       }
       console.error('Failed to update entry:', _error);
-    },
-
-    onSettled: () => {
-      // Refetch in background to sync with server
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      alert('Failed to update entry. Please try again.');
     },
   });
 }
@@ -275,6 +315,11 @@ export function useDeleteEntry() {
       return { previousEntries, previousDashboard };
     },
 
+    onSuccess: () => {
+      // Entry already removed optimistically, just invalidate dashboard
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+
     onError: (_error, _variables, context) => {
       // Rollback on error
       if (context?.previousEntries) {
@@ -288,12 +333,7 @@ export function useDeleteEntry() {
         });
       }
       console.error('Failed to delete entry:', _error);
-    },
-
-    onSettled: () => {
-      // Refetch in background to sync with server
-      queryClient.invalidateQueries({ queryKey: ['entries'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      alert('Failed to delete entry. Please try again.');
     },
   });
 }
