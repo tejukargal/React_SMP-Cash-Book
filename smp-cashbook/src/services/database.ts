@@ -136,7 +136,7 @@ export const db = {
 
   // Get autocomplete suggestions for head of accounts
   async getHeadOfAccountsSuggestions(query: string, type?: EntryType, financialYear?: string): Promise<AutocompleteOption[]> {
-    if (!query || query.length < 4) return [];
+    if (!query || query.length < 1) return []; // Instant suggestions from first character!
 
     try {
       const params = new URLSearchParams();
@@ -163,7 +163,7 @@ export const db = {
 
   // Get autocomplete suggestions for notes
   async getNotesSuggestions(query: string, type?: EntryType, financialYear?: string): Promise<AutocompleteOption[]> {
-    if (!query || query.length < 4) return [];
+    if (!query || query.length < 1) return []; // Instant suggestions from first character!
 
     try {
       const params = new URLSearchParams();

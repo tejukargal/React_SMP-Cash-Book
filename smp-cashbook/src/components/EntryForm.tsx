@@ -202,8 +202,8 @@ export default function EntryForm({
           setIsNotesAutoPopulated(false);
           setSelectedFields(prev => ({ ...prev, notes: false }));
         }
-      } else if (value.length >= 4) {
-        // Instant suggestions - no debounce
+      } else if (value.length >= 1) {
+        // Instant suggestions - starts from first character!
         const cacheKey = `${processedValue}-${selectedType}-${selectedFY}`;
         const cached = suggestionsCache.current.head.get(cacheKey);
 
@@ -218,8 +218,8 @@ export default function EntryForm({
             setSuggestions(prev => ({ ...prev, head: suggestions.slice(0, 1) }));
           })();
         }
-      } else if (value.length < 4) {
-        // Clear suggestions if less than 4 characters
+      } else if (value.length < 1) {
+        // Clear suggestions if empty
         setSuggestions(prev => ({ ...prev, head: [] }));
       }
     } else if (name === 'notes') {
@@ -232,8 +232,8 @@ export default function EntryForm({
         // Field cleared - reset selection state
         setSelectedFields(prev => ({ ...prev, notes: false }));
         setSuggestions(prev => ({ ...prev, notes: [] }));
-      } else if (value.length >= 4 && !selectedFields.notes) {
-        // Instant suggestions - no debounce
+      } else if (value.length >= 1 && !selectedFields.notes) {
+        // Instant suggestions - starts from first character!
         const cacheKey = `${processedValue}-${selectedType}-${selectedFY}`;
         const cached = suggestionsCache.current.notes.get(cacheKey);
 
@@ -248,8 +248,8 @@ export default function EntryForm({
             setSuggestions(prev => ({ ...prev, notes: suggestions.slice(0, 1) }));
           })();
         }
-      } else if (value.length < 4) {
-        // Clear suggestions if less than 4 characters
+      } else if (value.length < 1) {
+        // Clear suggestions if empty
         setSuggestions(prev => ({ ...prev, notes: [] }));
       }
     }
@@ -302,7 +302,7 @@ export default function EntryForm({
           fetchAndPopulateNotes(formData.head_of_accounts);
         }
       }
-    }, 150); // Reduced from 200ms to 150ms
+    }, 100); // Reduced from 150ms to 100ms for faster response
   };
 
   const handleKeyDown = (
@@ -404,13 +404,13 @@ export default function EntryForm({
         setFormData(prev => ({ ...prev, notes }));
         setIsNotesAutoPopulated(true);
 
-        // Auto-select the notes text for easy replacement - immediate focus
-        setTimeout(() => {
+        // Auto-select the notes text for easy replacement - instant!
+        requestAnimationFrame(() => {
           if (notesInputRef.current && document.activeElement !== notesInputRef.current) {
             notesInputRef.current.select();
             notesInputRef.current.focus();
           }
-        }, 30); // Reduced to 30ms for faster response
+        });
       }
     } catch (error) {
       console.error('Failed to fetch notes for head:', error);

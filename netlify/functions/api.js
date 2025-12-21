@@ -381,7 +381,7 @@ exports.handler = async (event, context) => {
     // ===== GET SUGGESTIONS =====
     if (method === 'GET' && route === 'suggestions/head') {
       const { query, type, fy } = queryParams;
-      if (!query || query.length < 4) return sendResponse(200, []);
+      if (!query || query.length < 1) return sendResponse(200, []); // Instant suggestions from first character!
 
       // Build WHERE conditions
       const conditions = ['LOWER(head_of_accounts) LIKE LOWER($1)'];
@@ -430,7 +430,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'GET' && route === 'suggestions/notes') {
       const { query, type, fy } = queryParams;
-      if (!query || query.length < 4) return sendResponse(200, []);
+      if (!query || query.length < 1) return sendResponse(200, []); // Instant suggestions from first character!
 
       // Build WHERE conditions
       const conditions = ['notes IS NOT NULL', 'LOWER(notes) LIKE LOWER($1)'];

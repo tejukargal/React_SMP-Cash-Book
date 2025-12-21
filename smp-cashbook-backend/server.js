@@ -285,7 +285,7 @@ app.get('/api/suggestions/head', async (req, res) => {
     const { query, type, fy } = req.query;
     console.log('🔍 HEAD SUGGESTIONS REQUEST - query:', query, 'type:', type, 'fy:', fy);
 
-    if (!query || query.length < 4) {
+    if (!query || query.length < 1) { // Instant suggestions from first character!
       return res.json([]);
     }
 
@@ -357,7 +357,7 @@ app.get('/api/suggestions/notes', async (req, res) => {
     const { query, type, fy } = req.query;
     console.log('🔍 NOTES SUGGESTIONS REQUEST - query:', query, 'type:', type, 'fy:', fy);
 
-    if (!query || query.length < 4) {
+    if (!query || query.length < 1) { // Instant suggestions from first character!
       return res.json([]);
     }
 
