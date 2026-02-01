@@ -28,7 +28,12 @@
       "Bash(node -e:*)",
       "Bash(STOP_SMP_CASHBOOK.bat)",
       "Bash(cmd /c \"D:\\Apps\\React_Cash Book\\STOP_SMP_CASHBOOK.bat\")",
-      "Bash(del \"D:\\Apps\\React_Cash Book\\smp-cashbook\\src\\hooks\\useEntries.ts\")"
+      "Bash(del \"D:\\Apps\\React_Cash Book\\smp-cashbook\\src\\hooks\\useEntries.ts\")",
+      "Bash(cmd /c \"STOP_SMP_CASHBOOK.bat\")",
+      "Bash(node convert-to-proper-case.js:*)",
+      "Bash(del convert-to-proper-case.js)",
+      "Bash(cmd /c \"del convert-to-proper-case.js\")",
+      "Bash(npx tsc:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

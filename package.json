@@ -4,6 +4,7 @@
   "description": "SMP Cash Book - Frontend and Backend",
   "private": true,
   "dependencies": {
+    "dotenv": "^17.2.3",
     "pg": "^8.11.3"
   }
 }
