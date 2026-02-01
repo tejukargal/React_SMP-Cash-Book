@@ -6,9 +6,10 @@ interface SidebarProps {
   onNavigate: (page: AppPage) => void;
   selectedCBType: CBType;
   selectedFY: string;
+  onLogout: () => void;
 }
 
-export default function Sidebar({ currentPage, onNavigate, selectedCBType, selectedFY }: SidebarProps) {
+export default function Sidebar({ currentPage, onNavigate, selectedCBType, selectedFY, onLogout }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard' as AppPage, label: 'Dashboard', icon: '🏠' },
     { id: 'entry' as AppPage, label: 'New Entry', icon: '➕' },
@@ -65,9 +66,16 @@ export default function Sidebar({ currentPage, onNavigate, selectedCBType, selec
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="p-2 border-t border-blue-600 text-center text-[10px] text-blue-200">
-        <p>&copy; 2025 SMP Sagar</p>
+      {/* Logout & Footer */}
+      <div className="p-2 border-t border-blue-600">
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-blue-200 hover:text-white hover:bg-blue-800 rounded transition-colors"
+        >
+          <span>🚪</span>
+          <span>Logout</span>
+        </button>
+        <p className="text-center text-[10px] text-blue-200 mt-1">&copy; 2025 SMP Sagar</p>
       </div>
     </aside>
   );

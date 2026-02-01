@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import LoginPage from './components/LoginPage';
 import Sidebar from './components/Sidebar';
 import DashboardPage from './pages/DashboardPage';
 import EntryPage from './pages/EntryPage';
@@ -13,6 +14,7 @@ import type { AppPage, CBType } from './types';
 import { getCurrentFinancialYear } from './utils/financialYear';
 
 function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem('isAuthenticated') === 'true');
   const [currentPage, setCurrentPage] = useState<AppPage>('dashboard');
   const [selectedFY, setSelectedFY] = useState<string>(() => {
     return localStorage.getItem('selectedFinancialYear') || getCurrentFinancialYear();
@@ -52,10 +54,19 @@ function App() {
     }, 3000);
   };
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('isAuthenticated');
+    setIsAuthenticated(false);
+  };
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="h-screen bg-gray-50 flex overflow-hidden">
       {/* Sidebar */}
-      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} selectedCBType={selectedCBType} selectedFY={selectedFY} />
+      <Sidebar currentPage={currentPage} onNavigate={handleNavigate} selectedCBType={selectedCBType} selectedFY={selectedFY} onLogout={handleLogout} />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
