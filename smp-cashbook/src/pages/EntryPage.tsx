@@ -583,7 +583,7 @@ export default function EntryPage({ selectedFY, selectedCBType, onNavigate, onSu
 
                     // Calculate total including opening balance for receipts
                     const previousBalance = runningBalance;
-                    const totalReceipts = dateReceipts + (groupIndex > 0 ? previousBalance : 0);
+                    const totalReceipts = dateReceipts + previousBalance;
 
                     // Total row
                     runningBalance += dateReceipts - datePayments;
